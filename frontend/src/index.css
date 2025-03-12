@@ -20,4 +20,17 @@ body,
 #app,
 #app > div {
   height: 100%;
+  font-family: "Source Code Pro", monospace;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+  background-color: #aaaaaa;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+  color: #0000aa;
 }

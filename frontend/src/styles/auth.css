@@ -1,5 +1,37 @@
 body {
-  background-color: black;
   color: white;
   font-family: Arial, sans-serif;
+}
+
+.main-form {
+  justify-content: center; /* Center horizontally */
+  align-items: center;
+}
+
+.main-form input {
+  border-radius: 0;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+  color: #0000aa;
+}
+
+button {
+  background-color: #0000aa;
+  color: white;
+}
+
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+button {
+  width: 100%;
 }

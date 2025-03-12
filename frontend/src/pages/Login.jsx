@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Container, Form, Button } from "react-bootstrap";
+import { Container, Form } from "react-bootstrap";
 import "../styles/auth.css";
 
 export default function Login() {
-  const [username, setUsername] = useState("");
+  const [form, setForm] = useState({ username: "", password: "" });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,13 +24,22 @@ export default function Login() {
             <Form.Control
               type="text"
               placeholder="Enter username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
             />
           </Form.Group>
-          <Button variant="primary" type="submit" className="w-100">
+          <Form.Group className="mb-3">
+            <Form.Label>Password</Form.Label>
+            <Form.Control
+              type="password"
+              placeholder="Enter password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </Form.Group>
+          <button variant="primary" type="submit">
             Login
-          </Button>
+          </button>
         </Form>
         <p className="text-center mt-3">
           Don't have an account? <a href="/register">Sign Up</a>

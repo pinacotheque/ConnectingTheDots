@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Container, Form, Button } from "react-bootstrap";
+import { Container, Form } from "react-bootstrap";
 
 export default function Register() {
   const [form, setForm] = useState({ username: "", email: "", password: "" });
@@ -15,7 +15,7 @@ export default function Register() {
   };
 
   return (
-    <Container className="d-flex text-align-center justify-content-center vh-100">
+    <Container className="d-flex justify-content-center align-items-center vh-100">
       <div className="main-form">
         <h2 className="text-center">Sign Up</h2>
         <Form onSubmit={handleSubmit}>
@@ -42,13 +42,11 @@ export default function Register() {
             <Form.Control
               type="password"
               placeholder="Enter password"
-              value={form.email}
+              value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
           </Form.Group>
-          <Button variant="success" type="submit" className="w-100">
-            Sign Up
-          </Button>
+          <button type="submit">Sign Up</button>
         </Form>
         <p className="text-center mt-3">
           Already have an account? <a href="/login">Login</a>
