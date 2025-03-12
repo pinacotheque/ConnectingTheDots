@@ -1,5 +1,5 @@
 
-# test# SWE573 - Software Development Practice
+# SWE573 - Software Development Practice
 
 ## 📌 Overview
 **Connecting The Dots** is a collaborative learning and brainstorming environment where users can explore, contribute and discuss various topics. 
