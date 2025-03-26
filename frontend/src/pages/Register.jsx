@@ -1,16 +1,21 @@
 import { useState } from "react";
 import { Container, Form } from "react-bootstrap";
+import "../styles/auth.css";
+import { registerUser } from "../api/auth";
+import { useNavigate } from "react-router-dom";
 
 export default function Register() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({ username: "", email: "", password: "" });
 
-  const handleSubmit = async (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
     try {
-      //   await signup(form);
-      console.log("registered");
+      const res = await registerUser(form);
+      console.log("Registered", res);
+      navigate("/login");
     } catch (error) {
-      alert("Signup failed");
+      console.error("Register failed:", error.message);
     }
   };
 
@@ -18,7 +23,7 @@ export default function Register() {
     <Container className="d-flex justify-content-center align-items-center vh-100">
       <div className="main-form">
         <h2 className="text-center">Sign Up</h2>
-        <Form onSubmit={handleSubmit}>
+        <Form onSubmit={handleRegister}>
           <Form.Group className="mb-3">
             <Form.Label>Username</Form.Label>
             <Form.Control

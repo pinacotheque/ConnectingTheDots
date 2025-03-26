@@ -1,16 +1,21 @@
 import { useState } from "react";
 import { Container, Form } from "react-bootstrap";
 import "../styles/auth.css";
+import { loginUser } from "../api/auth";
+import { useNavigate } from "react-router-dom";
 
 export default function Login() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({ username: "", password: "" });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // await login({ username });
+      const res = await loginUser(form);
+      console.log("Logged in", res);
+      navigate("/");
     } catch (error) {
-      alert("Login failed");
+      console.error("Login failed:", error.message);
     }
   };
 
