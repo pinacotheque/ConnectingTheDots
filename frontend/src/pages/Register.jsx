@@ -20,7 +20,7 @@ export default function Register() {
   };
 
   return (
-    <Container className="d-flex justify-content-center align-items-center vh-100">
+    <Container className="d-flex justify-content-center align-items-center vh-100 auth">
       <div className="main-form">
         <h2 className="text-center">Sign Up</h2>
         <Form onSubmit={handleRegister}>

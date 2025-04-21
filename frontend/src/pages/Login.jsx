@@ -20,7 +20,7 @@ export default function Login() {
   };
 
   return (
-    <Container className="d-flex">
+    <Container className="d-flex auth">
       <div className="main-form">
         <h2 className="text-center mb-4">Login</h2>
         <Form onSubmit={handleSubmit}>

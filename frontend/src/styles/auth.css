@@ -1,4 +1,4 @@
-body {
+.auth body {
   color: white;
   font-family: Arial, sans-serif;
 }
@@ -20,18 +20,15 @@ h5 {
   color: #0000aa;
 }
 
-button {
+.auth button {
   background-color: #0000aa;
   color: white;
+  width: 100%;
 }
 
-.container {
+.auth {
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100vh;
-}
-
-button {
-  width: 100%;
 }

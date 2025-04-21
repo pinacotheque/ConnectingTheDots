@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, Space, Tag
 from django.contrib.auth.hashers import make_password, check_password
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -12,19 +12,16 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ["id", "username", "email", "password"]
 
     def validate_username(self, value):
-        """Ensure username is unique"""
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError("Username is already taken.")
         return value
 
     def validate_email(self, value):
-        """Ensure email is unique"""
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("Email is already registered.")
         return value
 
     def create(self, validated_data):
-        """Hash password before saving"""
         validated_data["password"] = make_password(validated_data["password"])
         return super().create(validated_data)
 
@@ -33,7 +30,6 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
 
     def validate(self, data):
-        """Validate username and password"""
         username = data.get("username")
         password = data.get("password")
 
@@ -51,4 +47,30 @@ class LoginSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "username", "email"]  # Password is excluded for security
+        fields = ["id", "username", "email"]
+
+
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = ['id', 'name']
+
+class SpaceSerializer(serializers.ModelSerializer):
+    tags = TagSerializer(many=True, required=False)
+    
+    class Meta:
+        model = Space
+        fields = ['id', 'title', 'description', 'created_at', 'updated_at', 'owner', 'tags']
+        read_only_fields = ['owner', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        tags_data = validated_data.pop('tags', [])
+        space = Space.objects.create(**validated_data)
+        
+        # Process tags
+        for tag_data in tags_data:
+            tag_name = tag_data.get('name')
+            tag, _ = Tag.objects.get_or_create(name=tag_name)
+            space.tags.add(tag)
+            
+        return space

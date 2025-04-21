@@ -1,0 +1,25 @@
+.home {
+  color: black;
+  display: flex;
+  height: fit-content;
+  margin-top: 20px;
+}
+.home > * {
+  margin: 20px;
+}
+.col1 {
+  width: 25%;
+}
+.col2 {
+  width: 75%;
+}
+.col2 > * {
+  margin-bottom: 20px;
+}
+.search {
+  background-color: white;
+  padding: 10px;
+}
+
+.browse {
+}
