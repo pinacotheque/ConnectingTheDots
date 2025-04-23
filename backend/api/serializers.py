@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from .models import User, Space, Tag
+from .models import Space, Tag
 from django.contrib.auth.hashers import make_password, check_password
+from django.contrib.auth.models import User
 
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
@@ -67,7 +68,6 @@ class SpaceSerializer(serializers.ModelSerializer):
         tags_data = validated_data.pop('tags', [])
         space = Space.objects.create(**validated_data)
         
-        # Process tags
         for tag_data in tags_data:
             tag_name = tag_data.get('name')
             tag, _ = Tag.objects.get_or_create(name=tag_name)
