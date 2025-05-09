@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from 'react';
 import {
   Button,
   Container,
@@ -7,19 +7,63 @@ import {
   Navbar,
   NavDropdown,
   Modal,
+  Alert,
 } from "react-bootstrap";
+import { Link, useNavigate } from 'react-router-dom';
+import { createSpace } from '../api/auth';
 
-function Navigation() {
+function Navigation({ onSpaceCreated }) {
   const [show, setShow] = useState(false);
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    tags: "",
+  });
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleClose = () => setShow(false);
+  const handleClose = () => {
+    setShow(false);
+    setForm({ title: "", description: "", tags: "" });
+    setError(null);
+  };
+
   const handleShow = () => setShow(true);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      setError(null);
+      const tagIds = form.tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0);
+
+      const spaceData = {
+        title: form.title,
+        description: form.description,
+        tag_ids: tagIds,
+      };
+
+      await createSpace(spaceData);
+      handleClose();
+      if (onSpaceCreated) {
+        onSpaceCreated();
+      }
+    } catch (error) {
+      console.error("Failed to create space:", error);
+      setError("Failed to create space. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
       <Navbar expand="lg" className="bg-body-tertiary">
         <Container fluid>
-          <Navbar.Brand href="/">ConnectingTheDots</Navbar.Brand>
+          <Navbar.Brand as={Link} to="/">ConnectingTheDots</Navbar.Brand>
           <Navbar.Toggle aria-controls="navbarScroll" />
           <Navbar.Collapse id="navbarScroll">
             <Nav
@@ -27,7 +71,7 @@ function Navigation() {
               style={{ maxHeight: "100px" }}
               navbarScroll
             >
-              <Nav.Link href="#action1">Home</Nav.Link>
+              <Nav.Link as={Link} to="/">Home</Nav.Link>
             </Nav>
             <Button variant="primary" onClick={handleShow}>
               Create a Space
@@ -38,12 +82,9 @@ function Navigation() {
                 title="Profile"
                 id="navbarScrollingDropdown"
               >
-                <NavDropdown.Item href="#action3">Action</NavDropdown.Item>
-                <NavDropdown.Item href="#action4">
-                  Another action
-                </NavDropdown.Item>
+                <NavDropdown.Item as={Link} to="/profile">View Profile</NavDropdown.Item>
                 <NavDropdown.Divider />
-                <NavDropdown.Item>Something else here</NavDropdown.Item>
+                <NavDropdown.Item as={Link} to="/logout">Logout</NavDropdown.Item>
               </NavDropdown>
             </Nav>
           </Navbar.Collapse>
@@ -54,40 +95,52 @@ function Navigation() {
           <Modal.Title>Create a Space</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <Form>
-            <Form.Group className="mb-3" controlId="exampleForm.ControlInput1">
+          {error && <Alert variant="danger">{error}</Alert>}
+          <Form onSubmit={handleSubmit}>
+            <Form.Group className="mb-3" controlId="spaceTitle">
               <Form.Label>Space Title</Form.Label>
               <Form.Control
                 type="text"
                 placeholder="Where is the cat?"
-                autoFocus
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                required
+                disabled={loading}
               />
             </Form.Group>
-            <Form.Group className="mb-3" controlId="exampleForm.ControlInput1">
+            <Form.Group className="mb-3" controlId="spaceTags">
               <Form.Label>Add Tags</Form.Label>
               <Form.Control
                 type="text"
                 placeholder="Crime, Science, Plants etc."
-                autoFocus
+                value={form.tags}
+                onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                disabled={loading}
               />
             </Form.Group>
-            <Form.Group
-              className="mb-3"
-              controlId="exampleForm.ControlTextarea1"
-            >
+            <Form.Group className="mb-3" controlId="spaceDescription">
               <Form.Label>Description</Form.Label>
-              <Form.Control as="textarea" rows={3} />
+              <Form.Control
+                as="textarea"
+                rows={3}
+                value={form.description}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
+                required
+                disabled={loading}
+              />
             </Form.Group>
+            <Modal.Footer>
+              <Button variant="secondary" onClick={handleClose} disabled={loading}>
+                Discard
+              </Button>
+              <Button variant="success" type="submit" disabled={loading}>
+                {loading ? "Creating..." : "Create"}
+              </Button>
+            </Modal.Footer>
           </Form>
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={handleClose}>
-            Discard
-          </Button>
-          <Button variant="success" onClick={handleClose}>
-            Create
-          </Button>
-        </Modal.Footer>
       </Modal>
     </>
   );

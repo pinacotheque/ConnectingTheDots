@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Container, Form } from "react-bootstrap";
 import "../styles/auth.css";
 import { loginUser } from "../api/auth";
@@ -12,7 +12,7 @@ export default function Login() {
     e.preventDefault();
     try {
       const res = await loginUser(form);
-      console.log("Logged in", res);
+      localStorage.setItem("token", res.token);
       navigate("/");
     } catch (error) {
       console.error("Login failed:", error.message);

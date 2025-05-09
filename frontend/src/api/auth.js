@@ -1,18 +1,106 @@
 import axios from "axios";
+import { setToken, removeToken, getAuthHeader } from "../utils/tokenManager";
 
 const API = axios.create({
-    baseURL: process.env.REACT_APP_API_URL,
+    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
     headers: {
         "Content-Type": "application/json",
     },
 });
 
+API.interceptors.request.use(
+    (config) => {
+        const authHeader = getAuthHeader();
+        if (authHeader) {
+            config.headers.Authorization = authHeader;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
+API.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+            removeToken();
+            window.location.href = '/login';
+        }
+        return Promise.reject(error);
+    }
+);
+
 export const registerUser = async (userData) => {
-    const response = await API.post("/register/", userData);
-    return response.data;
+    try {
+        const response = await API.post("/register/", userData);
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred during registration' };
+    }
 };
 
 export const loginUser = async (credentials) => {
-    const response = await API.post("/login/", credentials);
-    return response.data;
+    try {
+        const response = await API.post("/login/", credentials);
+        const { access } = response.data;
+        if (access) {
+            setToken(access);
+        }
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred during login' };
+    }
+};
+
+export const createSpace = async (spaceData) => {
+    try {
+        const response = await API.post("/spaces/", spaceData);
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred while creating the space' };
+    }
+};
+
+export const getSpaces = async () => {
+    try {
+        const response = await API.get("/spaces/");
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred while fetching spaces' };
+    }
+};
+
+export const joinSpace = async (spaceId) => {
+    try {
+        const response = await API.post(`/spaces/${spaceId}/join/`);
+        return {
+            message: response.data.detail,
+            space: response.data.space
+        };
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred while joining the space' };
+    }
+};
+
+export const leaveSpace = async (spaceId) => {
+    try {
+        const response = await API.post(`/spaces/${spaceId}/leave/`);
+        return {
+            message: response.data.detail,
+            space: response.data.space
+        };
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred while leaving the space' };
+    }
+};
+
+export const getSpace = async (spaceId) => {
+    try {
+        const response = await API.get(`/spaces/${spaceId}/`);
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred while fetching the space' };
+    }
 };

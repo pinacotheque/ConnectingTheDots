@@ -1,0 +1,48 @@
+.space-detail-container {
+    padding: 2rem 0;
+}
+
+.space-detail-container h2 {
+    margin-bottom: 0.5rem;
+}
+
+.tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.collaborators-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.collaborator-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+.collaborator-name {
+    font-weight: 500;
+    color: #333;
+}
+
+.card {
+    height: 100%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card-title {
+    color: #333;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.badge {
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+} 

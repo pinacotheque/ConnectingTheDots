@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Container, Form } from "react-bootstrap";
 import "../styles/auth.css";
 import { registerUser } from "../api/auth";
@@ -12,7 +12,6 @@ export default function Register() {
     e.preventDefault();
     try {
       const res = await registerUser(form);
-      console.log("Registered", res);
       navigate("/login");
     } catch (error) {
       console.error("Register failed:", error.message);
