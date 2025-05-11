@@ -3,7 +3,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: gunicorn backend.wsgi:application --bind 0.0.0.0:8000
+    command: >
+      bash -c "python manage.py migrate &&
+               gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --reload"
     volumes:
       - ./backend:/app
     ports:
@@ -12,28 +14,35 @@ services:
       - ./backend/.env.docker
     environment:
       - DOCKER=true
+      - DEBUG=False
+      - ALLOWED_HOSTS=*
     depends_on:
       - db
+    restart: always
 
   db:
     image: postgres:16-alpine
     env_file:
       - ./backend/.env.docker
+    environment:
+      - POSTGRES_DB=mydb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data/
+    restart: always
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      # args:
-      #   API_URL: http://localhost:8000/api
     ports:
       - "3000:80"
     depends_on:
       - api
+    restart: always
 
 volumes:
   postgres_data:
