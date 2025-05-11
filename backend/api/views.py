@@ -1,8 +1,9 @@
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from .models import Space, Tag
-from .serializers import  RegisterSerializer, SpaceSerializer, TagSerializer, UserSerializer
+from .models import Space, Tag, Node, Edge
+from .serializers import (RegisterSerializer, SpaceSerializer, TagSerializer, 
+                         UserSerializer, NodeSerializer, EdgeSerializer)
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from django.contrib.auth import authenticate
@@ -10,6 +11,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.db import transaction
+import requests
 
 
 @api_view(['POST'])
@@ -46,39 +48,6 @@ def logout(request):
     request.session.flush()
     return Response({"message": "Logged out successfully"}, status=200)
 
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def search_wikidata_tags(request):
-    query = request.GET.get('q', '')
-    if not query or len(query) < 2:
-        return Response({"error": "Query too short"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    url = 'https://www.wikidata.org/w/api.php'
-    params = {
-        'action': 'wbsearchentities',
-        'search': query,
-        'language': 'en',
-        'format': 'json',
-        'limit': 50,
-    }
-    
-    try:
-        response = request.get(url, params=params)
-        data = response.json()
-        
-        results = []
-        for item in data.get('search', []):
-            result = {
-                'wikidata_id': item.get('id'),
-                'name': item.get('label'),
-                'description': item.get('description', ''),
-            }
-            results.append(result)
-        
-        return Response(results)
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -126,6 +95,83 @@ class SpaceViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         tag_ids = self.request.data.get('tag_ids', [])
         serializer.save(tag_ids=tag_ids)
+    
+    @action(detail=False, methods=['get'], url_path='search_wikidata')
+    def search_wikidata(self, request):
+        query = request.query_params.get('q', '')
+        if not query or len(query) < 2:
+            return Response({"error": "Query too short"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        url = 'https://www.wikidata.org/w/api.php'
+        params = {
+            'action': 'wbsearchentities',
+            'search': query,
+            'language': 'en',
+            'format': 'json',
+            'limit': 50,
+        }
+        
+        try:
+            response = requests.get(url, params=params)
+            data = response.json()
+            
+            results = []
+            for item in data.get('search', []):
+                result = {
+                    'wikidata_id': item.get('id'),
+                    'label': item.get('label'),
+                    'description': item.get('description', ''),
+                }
+                results.append(result)
+            
+            return Response(results)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'], url_path='get_wikidata_properties')
+    def get_wikidata_properties(self, request):
+        entity_id = request.query_params.get('entity_id')
+        if not entity_id:
+            return Response({"error": "Entity ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        url = 'https://www.wikidata.org/w/api.php'
+        params = {
+            'action': 'wbgetclaims',
+            'entity': entity_id,
+            'format': 'json',
+            'limit': 50,
+        }
+        
+        try:
+            response = requests.get(url, params=params)
+            data = response.json()
+            
+            properties = []
+            for prop_id, claims in data.get('claims', {}).items():
+                if claims:
+                    # Get property label
+                    prop_url = 'https://www.wikidata.org/w/api.php'
+                    prop_params = {
+                        'action': 'wbgetentities',
+                        'ids': prop_id,
+                        'languages': 'en',
+                        'format': 'json',
+                    }
+                    prop_response = requests.get(prop_url, params=prop_params)
+                    prop_data = prop_response.json()
+                    
+                    prop_label = prop_data.get('entities', {}).get(prop_id, {}).get('labels', {}).get('en', {}).get('value', prop_id)
+                    
+                    property_info = {
+                        'wikidata_id': prop_id,
+                        'label': prop_label,
+                        'values': [claim.get('mainsnak', {}).get('datavalue', {}).get('value', {}) for claim in claims]
+                    }
+                    properties.append(property_info)
+            
+            return Response(properties)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['post'])
     @transaction.atomic
@@ -227,7 +273,57 @@ class SpaceViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=True, methods=['get'])
+    def nodes(self, request, pk=None):
+        space = self.get_object()
+        nodes = Node.objects.filter(space=space)
+        serializer = NodeSerializer(nodes, many=True)
+        return Response(serializer.data)
+
 class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+class NodeViewSet(viewsets.ModelViewSet):
+    queryset = Node.objects.all()
+    serializer_class = NodeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        space_id = self.request.query_params.get('space_id')
+        if space_id:
+            return Node.objects.filter(space_id=space_id)
+        return Node.objects.none()
+    
+    def perform_create(self, serializer):
+        serializer.save(creator=self.request.user)
+    
+    @action(detail=True, methods=['post'])
+    def create_edge(self, request, pk=None):
+        node = self.get_object()
+        target_node_id = request.data.get('target_node_id')
+        property_wikidata_id = request.data.get('property_wikidata_id')
+        
+        if not target_node_id or not property_wikidata_id:
+            return Response(
+                {"error": "Target node ID and property Wikidata ID are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            target_node = Node.objects.get(id=target_node_id, space=node.space)
+        except Node.DoesNotExist:
+            return Response(
+                {"error": "Target node not found in the same space"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        edge = Edge.objects.create(
+            source_node=node,
+            target_node=target_node,
+            property_wikidata_id=property_wikidata_id
+        )
+        
+        serializer = EdgeSerializer(edge)
+        return Response(serializer.data)

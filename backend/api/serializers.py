@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Space, Tag
+from .models import Space, Tag, Node, Edge
 from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import User
 
@@ -56,17 +56,37 @@ class TagSerializer(serializers.ModelSerializer):
         model = Tag
         fields = ('id', 'name', 'wikidata_id', 'description')
 
+class NodeSerializer(serializers.ModelSerializer):
+    creator = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = Node
+        fields = ('id', 'space', 'creator', 'wikidata_id', 'label', 'description', 
+                 'properties', 'created_at', 'updated_at')
+        read_only_fields = ('creator',)
+
+class EdgeSerializer(serializers.ModelSerializer):
+    source_node = NodeSerializer(read_only=True)
+    target_node = NodeSerializer(read_only=True)
+    
+    class Meta:
+        model = Edge
+        fields = ('id', 'source_node', 'target_node', 'property_wikidata_id', 'created_at')
+        read_only_fields = ('source_node', 'target_node')
+
 class SpaceSerializer(serializers.ModelSerializer):
     owner = UserSerializer(read_only=True)
     contributors = UserSerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
+    nodes = NodeSerializer(many=True, read_only=True)
     is_owner = serializers.SerializerMethodField()
     is_contributor = serializers.SerializerMethodField()
     
     class Meta:
         model = Space
-        fields = ('id', 'title', 'description', 'owner', 'contributors', 'tags', 'created_at', 'updated_at', 'is_owner', 'is_contributor')
-        read_only_fields = ('owner', 'contributors')
+        fields = ('id', 'title', 'description', 'owner', 'contributors', 'tags', 
+                 'nodes', 'created_at', 'updated_at', 'is_owner', 'is_contributor')
+        read_only_fields = ('owner', 'contributors', 'nodes')
     
     def get_is_owner(self, obj):
         request = self.context.get('request')
@@ -85,14 +105,12 @@ class SpaceSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             raise serializers.ValidationError("User must be authenticated to create a space")
         
-        # Create the space with the authenticated user as owner
         space = Space.objects.create(
             owner=request.user,
             title=validated_data.get('title'),
             description=validated_data.get('description')
         )
         
-        # Handle tags if provided
         tag_ids = self.context.get('tag_ids', [])
         if tag_ids:
             tags = Tag.objects.filter(id__in=tag_ids)
