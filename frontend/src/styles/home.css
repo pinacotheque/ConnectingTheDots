@@ -1,17 +1,15 @@
 .home {
   color: black;
   display: flex;
-  height: fit-content;
-  margin-top: 20px;
+  height: 100vh;
+  margin-top: 24px;
 }
 .home > * {
   margin: 20px;
 }
-.col1 {
-  width: 25%;
-}
 .col2 {
-  width: 75%;
+  margin: 0 auto;
+  max-width: 800px;
 }
 .col2 > * {
   margin-bottom: 20px;
@@ -19,10 +17,45 @@
 .search {
   background-color: white;
   padding: 10px;
+  margin-bottom: 24px;
 }
 
 .browse {
+  margin-top: 24px;
 }
 .space {
   cursor: pointer;
+}
+
+.tags-container {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.clickable-tag {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 8px 12px;
+}
+
+.clickable-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.space {
+  transition: transform 0.2s ease;
+}
+
+.space:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1) !important;
 }

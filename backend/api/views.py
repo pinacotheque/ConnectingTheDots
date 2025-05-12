@@ -389,3 +389,23 @@ class NodeViewSet(viewsets.ModelViewSet):
         
         serializer = EdgeSerializer(edge)
         return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_profile(request):
+    """
+    Get the logged-in user's profile information including owned spaces and contributed spaces.
+    """
+    user = request.user
+    owned_spaces = Space.objects.filter(owner=user)
+    contributed_spaces = user.contributed_spaces.all()
+    
+    owned_spaces_serializer = SpaceSerializer(owned_spaces, many=True)
+    contributed_spaces_serializer = SpaceSerializer(contributed_spaces, many=True)
+    user_serializer = UserSerializer(user)
+    
+    return Response({
+        "user": user_serializer.data,
+        "owned_spaces": owned_spaces_serializer.data,
+        "contributed_spaces": contributed_spaces_serializer.data
+    })

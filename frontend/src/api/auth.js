@@ -183,3 +183,32 @@ export const getEdges = async (spaceId) => {
         throw error.response?.data || { message: 'An error occurred while fetching edges' };
     }
 };
+
+export const getUserProfile = async () => {
+    try {
+        const response = await API.get('/profile/');
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred while fetching user profile' };
+    }
+};
+
+export const logoutUser = async () => {
+    try {
+        await API.post('/logout/');
+        removeToken();
+        return { success: true };
+    } catch (error) {
+        removeToken();
+        return { success: true };
+    }
+};
+
+export const getTags = async () => {
+    try {
+        const response = await API.get('/tags/');
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred while fetching tags' };
+    }
+};

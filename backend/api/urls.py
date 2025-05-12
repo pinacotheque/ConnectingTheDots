@@ -12,5 +12,6 @@ urlpatterns = [
     path('login/', views.login, name='login'),
     path('logout/', views.logout, name='logout'),
     path('tags/create/', views.create_tag, name='create-tag'),
+    path('profile/', views.user_profile, name='user-profile'),
     path('', include(router.urls)),
 ]

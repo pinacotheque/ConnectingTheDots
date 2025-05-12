@@ -1,3 +1,32 @@
 .modal {
   color: black;
 }
+
+.dropdown-toggle::after {
+  margin-left: 0.5em;
+  vertical-align: middle;
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.dropdown-toggle:hover .user-avatar {
+  background-color: #0d6efd !important;
+}
+
+#navbarScrollingDropdown {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+}
+
+.navbar-nav .dropdown-menu {
+  right: 0;
+  left: auto;
+}

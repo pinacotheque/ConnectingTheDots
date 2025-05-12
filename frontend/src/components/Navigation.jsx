@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Button,
   Container,
@@ -13,7 +13,8 @@ import {
   Spinner,
 } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
-import { createSpace, searchWikidata } from "../api/auth";
+import { createSpace, searchWikidata, getUserProfile, logoutUser } from "../api/auth";
+import "../styles/navigation.css";
 
 function Navigation({ onSpaceCreated }) {
   const [show, setShow] = useState(false);
@@ -27,6 +28,37 @@ function Navigation({ onSpaceCreated }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        setProfileLoading(true);
+        const data = await getUserProfile();
+        setUser(data.user);
+      } catch (err) {
+        console.error("Error fetching user profile:", err);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
+  const handleLogout = async (e) => {
+    e.preventDefault();
+    try {
+      await logoutUser();
+      navigate('/login');
+    } catch (error) {
+      console.error("Error during logout:", error);
+      // Force navigation to login even if there's an error
+      navigate('/login');
+    }
+  };
 
   const handleClose = () => {
     setShow(false);
@@ -118,20 +150,29 @@ function Navigation({ onSpaceCreated }) {
                 Home
               </Nav.Link>
             </Nav>
-            <Button variant="primary" onClick={handleShow}>
+            <Button variant="primary" onClick={handleShow} className="me-3">
               Create a Space
             </Button>
             <Nav>
               <NavDropdown
                 align="end"
-                title="Profile"
+                title={
+                  profileLoading ? (
+                    <span className="d-flex align-items-center">
+                      <Spinner animation="border" size="sm" className="me-1" />
+                      Profile
+                    </span>
+                  ) : (
+                    user?.username || "Profile"
+                  )
+                }
                 id="navbarScrollingDropdown"
               >
                 <NavDropdown.Item as={Link} to="/profile">
                   View Profile
                 </NavDropdown.Item>
                 <NavDropdown.Divider />
-                <NavDropdown.Item as={Link} to="/logout">
+                <NavDropdown.Item onClick={handleLogout}>
                   Logout
                 </NavDropdown.Item>
               </NavDropdown>

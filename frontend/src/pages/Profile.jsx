@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Container, Row, Col, Card, Tab, Nav, Alert } from "react-bootstrap";
+import { Container, Row, Col, Card, Tab, Nav, Alert, Badge, Spinner } from "react-bootstrap";
 import { Link } from "react-router-dom";
+import { getUserProfile } from "../api/auth";
 import "../styles/profile.css";
 
 function Profile() {
@@ -17,24 +18,10 @@ function Profile() {
   const fetchUserData = async () => {
     try {
       setLoading(true);
-      const mockUser = {
-        id: 1,
-        username: "testuser",
-        email: "test@example.com",
-      };
-      setUser(mockUser);
-
-      const mockOwnedSpaces = [
-        { id: 1, title: "My Space 1", description: "Description 1" },
-        { id: 2, title: "My Space 2", description: "Description 2" },
-      ];
-      const mockContributedSpaces = [
-        { id: 3, title: "Contributed Space 1", description: "Description 3" },
-        { id: 4, title: "Contributed Space 2", description: "Description 4" },
-      ];
-
-      setOwnedSpaces(mockOwnedSpaces);
-      setContributedSpaces(mockContributedSpaces);
+      const data = await getUserProfile();
+      setUser(data.user);
+      setOwnedSpaces(data.owned_spaces);
+      setContributedSpaces(data.contributed_spaces);
     } catch (err) {
       setError("Failed to load profile data");
       console.error("Error fetching profile:", err);
@@ -46,7 +33,11 @@ function Profile() {
   if (loading) {
     return (
       <Container className="profile-container">
-        <div>Loading profile...</div>
+        <div className="d-flex justify-content-center align-items-center" style={{ height: "60vh" }}>
+          <Spinner animation="border" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </Spinner>
+        </div>
       </Container>
     );
   }
@@ -79,6 +70,14 @@ function Profile() {
                 <p>
                   <strong>Email:</strong> {user?.email}
                 </p>
+                <div className="mt-3">
+                  <Badge bg="primary" className="me-2">
+                    {ownedSpaces.length} Owned Spaces
+                  </Badge>
+                  <Badge bg="info">
+                    {contributedSpaces.length} Contributed Spaces
+                  </Badge>
+                </div>
               </div>
             </Card.Body>
           </Card>
@@ -97,30 +96,80 @@ function Profile() {
             <Tab.Content>
               <Tab.Pane eventKey="owned">
                 <div className="spaces-grid">
-                  {ownedSpaces.map((space) => (
-                    <Card key={space.id} className="space-card">
-                      <Card.Body>
-                        <Card.Title>
-                          <Link to={`/spaces/${space.id}`}>{space.title}</Link>
-                        </Card.Title>
-                        <Card.Text>{space.description}</Card.Text>
-                      </Card.Body>
-                    </Card>
-                  ))}
+                  {ownedSpaces.length > 0 ? (
+                    ownedSpaces.map((space) => (
+                      <Card key={space.id} className="space-card">
+                        <Card.Body>
+                          <Card.Title>
+                            <Link to={`/spaces/${space.id}`}>{space.title}</Link>
+                          </Card.Title>
+                          <Card.Text>{space.description}</Card.Text>
+                          {space.tags && space.tags.length > 0 && (
+                            <div className="space-tags">
+                              {space.tags.map((tag) => (
+                                <Badge
+                                  key={tag.id}
+                                  bg="secondary"
+                                  className="me-1 mb-1"
+                                >
+                                  {tag.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          <div className="text-muted small mt-2">
+                            Created: {new Date(space.created_at).toLocaleDateString()}
+                          </div>
+                        </Card.Body>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="text-center text-muted p-4">
+                      <p>You haven't created any spaces yet.</p>
+                      <Link to="/spaces/create" className="btn btn-sm btn-primary">
+                        Create a Space
+                      </Link>
+                    </div>
+                  )}
                 </div>
               </Tab.Pane>
               <Tab.Pane eventKey="contributed">
                 <div className="spaces-grid">
-                  {contributedSpaces.map((space) => (
-                    <Card key={space.id} className="space-card">
-                      <Card.Body>
-                        <Card.Title>
-                          <Link to={`/spaces/${space.id}`}>{space.title}</Link>
-                        </Card.Title>
-                        <Card.Text>{space.description}</Card.Text>
-                      </Card.Body>
-                    </Card>
-                  ))}
+                  {contributedSpaces.length > 0 ? (
+                    contributedSpaces.map((space) => (
+                      <Card key={space.id} className="space-card">
+                        <Card.Body>
+                          <Card.Title>
+                            <Link to={`/spaces/${space.id}`}>{space.title}</Link>
+                          </Card.Title>
+                          <Card.Text>{space.description}</Card.Text>
+                          {space.tags && space.tags.length > 0 && (
+                            <div className="space-tags">
+                              {space.tags.map((tag) => (
+                                <Badge
+                                  key={tag.id}
+                                  bg="secondary"
+                                  className="me-1 mb-1"
+                                >
+                                  {tag.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          <div className="text-muted small mt-2">
+                            Owner: {space.owner?.username}
+                          </div>
+                        </Card.Body>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="text-center text-muted p-4">
+                      <p>You haven't joined any spaces yet.</p>
+                      <Link to="/" className="btn btn-sm btn-primary">
+                        Explore Spaces
+                      </Link>
+                    </div>
+                  )}
                 </div>
               </Tab.Pane>
             </Tab.Content>
