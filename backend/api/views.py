@@ -12,6 +12,7 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.db import transaction
 import requests
+from django.db.models import Q
 
 
 @api_view(['POST'])
@@ -93,8 +94,48 @@ class SpaceViewSet(viewsets.ModelViewSet):
         return queryset.distinct()
     
     def perform_create(self, serializer):
-        tag_ids = self.request.data.get('tag_ids', [])
-        serializer.save(tag_ids=tag_ids)
+        tags = self.request.data.get('tags', [])
+        serializer.save(owner=self.request.user, tags=tags)
+    
+    def destroy(self, request, *args, **kwargs):
+        try:
+            space = self.get_object()
+            
+            if space.owner != request.user:
+                return Response(
+                    {
+                        "detail": "Only the space owner can delete the space.",
+                        "code": "not_owner"
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            space.delete()
+            return Response(
+                {
+                    "detail": "Space successfully deleted.",
+                    "code": "space_deleted"
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Space.DoesNotExist:
+            return Response(
+                {
+                    "detail": "Space not found.",
+                    "code": "space_not_found"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {
+                    "detail": "An error occurred while deleting the space.",
+                    "code": "server_error",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=False, methods=['get'], url_path='search_wikidata')
     def search_wikidata(self, request):
@@ -149,7 +190,6 @@ class SpaceViewSet(viewsets.ModelViewSet):
             properties = []
             for prop_id, claims in data.get('claims', {}).items():
                 if claims:
-                    # Get property label
                     prop_url = 'https://www.wikidata.org/w/api.php'
                     prop_params = {
                         'action': 'wbgetentities',
@@ -280,6 +320,27 @@ class SpaceViewSet(viewsets.ModelViewSet):
         serializer = NodeSerializer(nodes, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['get'])
+    def edges(self, request, pk=None):
+        try:
+            space = self.get_object()
+            edges = Edge.objects.filter(
+                Q(source_node__space=space) | Q(target_node__space=space)
+            ).select_related('source_node', 'target_node')
+            
+            serializer = EdgeSerializer(edges, many=True)
+            return Response(serializer.data)
+        except Space.DoesNotExist:
+            return Response(
+                {"detail": "Space not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
@@ -301,26 +362,27 @@ class NodeViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def create_edge(self, request, pk=None):
-        node = self.get_object()
+        source_node_id = request.data.get('source_node_id')
         target_node_id = request.data.get('target_node_id')
         property_wikidata_id = request.data.get('property_wikidata_id')
         
-        if not target_node_id or not property_wikidata_id:
+        if not source_node_id or not target_node_id or not property_wikidata_id:
             return Response(
-                {"error": "Target node ID and property Wikidata ID are required"},
+                {"error": "Source node ID, target node ID, and property Wikidata ID are required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         try:
-            target_node = Node.objects.get(id=target_node_id, space=node.space)
+            source_node = Node.objects.get(id=source_node_id)
+            target_node = Node.objects.get(id=target_node_id, space=source_node.space)
         except Node.DoesNotExist:
             return Response(
-                {"error": "Target node not found in the same space"},
+                {"error": "Source or target node not found in the same space"},
                 status=status.HTTP_404_NOT_FOUND
             )
         
         edge = Edge.objects.create(
-            source_node=node,
+            source_node=source_node,
             target_node=target_node,
             property_wikidata_id=property_wikidata_id
         )

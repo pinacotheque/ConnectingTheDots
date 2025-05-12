@@ -79,14 +79,15 @@ class SpaceSerializer(serializers.ModelSerializer):
     contributors = UserSerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     nodes = NodeSerializer(many=True, read_only=True)
+    edges = EdgeSerializer(many=True, read_only=True)
     is_owner = serializers.SerializerMethodField()
     is_contributor = serializers.SerializerMethodField()
     
     class Meta:
         model = Space
         fields = ('id', 'title', 'description', 'owner', 'contributors', 'tags', 
-                 'nodes', 'created_at', 'updated_at', 'is_owner', 'is_contributor')
-        read_only_fields = ('owner', 'contributors', 'nodes')
+                 'nodes', 'edges', 'created_at', 'updated_at', 'is_owner', 'is_contributor')
+        read_only_fields = ('owner', 'contributors', 'nodes', 'edges')
     
     def get_is_owner(self, obj):
         request = self.context.get('request')
@@ -101,33 +102,43 @@ class SpaceSerializer(serializers.ModelSerializer):
         return False
     
     def create(self, validated_data):
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            raise serializers.ValidationError("User must be authenticated to create a space")
+        tags_data = validated_data.pop('tags', [])
         
         space = Space.objects.create(
-            owner=request.user,
+            owner=validated_data.get('owner'),
             title=validated_data.get('title'),
             description=validated_data.get('description')
         )
         
-        tag_ids = self.context.get('tag_ids', [])
-        if tag_ids:
-            tags = Tag.objects.filter(id__in=tag_ids)
-            space.tags.add(*tags)
+        for tag_data in tags_data:
+            tag, created = Tag.objects.get_or_create(
+                wikidata_id=tag_data['wikidata_id'],
+                defaults={
+                    'name': tag_data['name'],
+                    'description': tag_data.get('description', '')
+                }
+            )
+            space.tags.add(tag)
         
         return space
     
     def update(self, instance, validated_data):
-        tag_ids = validated_data.pop('tag_ids', None)
+        tags_data = validated_data.pop('tags', None)
         
         instance.title = validated_data.get('title', instance.title)
         instance.description = validated_data.get('description', instance.description)
         instance.save()
         
-        if tag_ids is not None:
+        if tags_data is not None:
             instance.tags.clear()
-            tags = Tag.objects.filter(id__in=tag_ids)
-            instance.tags.add(*tags)
+            for tag_data in tags_data:
+                tag, created = Tag.objects.get_or_create(
+                    wikidata_id=tag_data['wikidata_id'],
+                    defaults={
+                        'name': tag_data['name'],
+                        'description': tag_data.get('description', '')
+                    }
+                )
+                instance.tags.add(tag)
             
         return instance

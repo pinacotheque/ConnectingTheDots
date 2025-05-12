@@ -151,3 +151,35 @@ export const createNode = async (spaceId, entity, selectedValues, properties) =>
         throw error.response?.data || { message: 'An error occurred while creating the node' };
     }
 };
+
+export const deleteSpace = async (spaceId) => {
+    try {
+        const response = await API.delete(`/spaces/${spaceId}/`);
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred while deleting the space' };
+    }
+};
+
+export const createEdge = async (sourceNodeId, targetNodeId, propertyId) => {
+    try {
+        const response = await API.post(`/nodes/${sourceNodeId}/create_edge/`, {
+            source_node_id: sourceNodeId,
+            target_node_id: targetNodeId,
+            property_wikidata_id: propertyId,
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Edge creation error:', error.response?.data || error);
+        throw error.response?.data || { message: 'An error occurred while creating the edge' };
+    }
+};
+
+export const getEdges = async (spaceId) => {
+    try {
+        const response = await API.get(`/spaces/${spaceId}/edges/`);
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred while fetching edges' };
+    }
+};

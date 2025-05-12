@@ -13,6 +13,17 @@ import {
   ListGroup,
   Spinner,
 } from "react-bootstrap";
+import ReactFlow, {
+  MiniMap,
+  Controls,
+  Background,
+  useNodesState,
+  useEdgesState,
+  Panel,
+  Handle,
+  Position,
+} from "reactflow";
+import "reactflow/dist/style.css";
 import {
   getSpace,
   joinSpace,
@@ -20,9 +31,51 @@ import {
   searchWikidata,
   getWikidataProperties,
   createNode,
+  deleteSpace,
+  createEdge,
+  getEdges,
 } from "../api/auth";
-import axios from "axios";
 import "../styles/spaceDetail.css";
+
+const nodeTypes = {
+  default: ({ data }) => (
+    <div
+      style={{
+        padding: "10px",
+        borderRadius: "5px",
+        backgroundColor: "#fff",
+        border: "1px solid #ddd",
+      }}
+    >
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="target"
+        style={{ background: "#555" }}
+      />
+      <div style={{ fontWeight: "bold" }}>{data.label}</div>
+      {data.description && (
+        <div style={{ fontSize: "0.8em", color: "#666" }}>
+          {data.description}
+        </div>
+      )}
+      <div style={{ fontSize: "0.7em", color: "#999" }}>
+        ID: {data.wikidata_id}
+      </div>
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="source"
+        style={{ background: "#555" }}
+      />
+    </div>
+  ),
+};
+
+const edgeStyles = {
+  stroke: "#FF5733",
+  strokeWidth: 2,
+};
 
 function SpaceDetail() {
   const { spaceId } = useParams();
@@ -31,6 +84,9 @@ function SpaceDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const [showCreateNode, setShowCreateNode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -41,15 +97,87 @@ function SpaceDetail() {
   const [nodeLoading, setNodeLoading] = useState(false);
   const [nodeError, setNodeError] = useState(null);
 
-  const [selectedNode, setSelectedNode] = useState(null);
-  const [showNodeDetails, setShowNodeDetails] = useState(false);
-
   const [selectedValues, setSelectedValues] = useState({});
   const [expandedProperties, setExpandedProperties] = useState({});
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const [createNodeStep, setCreateNodeStep] = useState("search");
+  const [selectedSourceNode, setSelectedSourceNode] = useState(null);
+  const [relationSearchQuery, setRelationSearchQuery] = useState("");
+  const [relationSearchResults, setRelationSearchResults] = useState([]);
+  const [selectedRelation, setSelectedRelation] = useState(null);
+  const [relationLoading, setRelationLoading] = useState(false);
+
+  const fetchEdges = async () => {
+    try {
+      const edgesData = await getEdges(spaceId);
+
+      if (!edgesData || edgesData.length === 0) {
+        setEdges([]);
+        return;
+      }
+
+      const flowEdges = edgesData.map((edge) => ({
+        id: edge.id.toString(),
+        source: edge.source_node.id.toString(),
+        sourceHandle: "source",
+        target: edge.target_node.id.toString(),
+        targetHandle: "target",
+        label: edge.label || edge.property_wikidata_id,
+        data: {
+          sourceLabel: edge.source_node.label,
+          targetLabel: edge.target_node.label,
+          propertyId: edge.property_wikidata_id,
+        },
+        type: "default",
+        animated: true,
+        style: { stroke: "#FF5733", strokeWidth: 2 },
+        markerEnd: {
+          type: "arrowclosed",
+        },
+        labelStyle: { fill: "#000", fontWeight: 700 },
+        labelBgStyle: { fill: "#fff", fillOpacity: 0.8 },
+        labelBgPadding: [4, 4],
+        labelBgBorderRadius: 4,
+      }));
+
+      setEdges(flowEdges);
+    } catch (err) {
+      setEdges([]);
+    }
+  };
 
   useEffect(() => {
     fetchSpaceData();
+    fetchEdges();
   }, [spaceId]);
+
+  useEffect(() => {
+    if (space?.nodes) {
+      const flowNodes = space.nodes.map((node, index) => ({
+        id: node.id.toString(),
+        type: "default",
+        position: {
+          x: 100 + (index % 3) * 250,
+          y: 100 + Math.floor(index / 3) * 200,
+        },
+        data: {
+          label: node.label,
+          description: node.description,
+          wikidata_id: node.wikidata_id,
+        },
+        connectable: true,
+      }));
+
+      setNodes(flowNodes);
+
+      if (flowNodes.length > 0) {
+        fetchEdges();
+      }
+    }
+  }, [space?.nodes, setNodes]);
 
   const fetchSpaceData = async () => {
     try {
@@ -113,6 +241,11 @@ function SpaceDetail() {
     try {
       const properties = await getWikidataProperties(entity.wikidata_id);
       setProperties(properties);
+      if (space.nodes && space.nodes.length > 0) {
+        setCreateNodeStep("selectSource");
+      } else {
+        setCreateNodeStep("selectRelation");
+      }
     } catch (err) {
       setNodeError("Failed to fetch entity properties");
       console.error("Error fetching properties:", err);
@@ -121,8 +254,31 @@ function SpaceDetail() {
     }
   };
 
+  const handleSourceNodeSelect = (node) => {
+    setSelectedSourceNode(node);
+    setCreateNodeStep("selectRelation");
+  };
+
+  const handleRelationSearch = async () => {
+    if (relationSearchQuery.length < 2) return;
+
+    setRelationLoading(true);
+    try {
+      const results = await searchWikidata(relationSearchQuery);
+      setRelationSearchResults(results);
+    } catch (err) {
+      setNodeError("Failed to search relationship type");
+      console.error("Error searching relationship:", err);
+    } finally {
+      setRelationLoading(false);
+    }
+  };
+
+  const handleRelationSelect = (relation) => {
+    setSelectedRelation(relation);
+  };
+
   const handlePropertyToggle = (property) => {
-    // Only toggle expanded state
     setExpandedProperties((prev) => ({
       ...prev,
       [property.wikidata_id]: !prev[property.wikidata_id],
@@ -155,10 +311,39 @@ function SpaceDetail() {
         selectedValues,
         properties
       );
-      setSpace((prev) => ({
-        ...prev,
-        nodes: [...prev.nodes, nodeData],
-      }));
+
+      if (selectedSourceNode && selectedRelation) {
+        try {
+          const sourceNodeId = parseInt(selectedSourceNode.id, 10);
+          const targetNodeId = parseInt(nodeData.id, 10);
+
+          if (isNaN(sourceNodeId) || isNaN(targetNodeId)) {
+            throw new Error("Invalid node IDs");
+          }
+
+          await createEdge(
+            sourceNodeId,
+            targetNodeId,
+            selectedRelation.wikidata_id
+          );
+
+          await fetchSpaceData();
+          await fetchEdges();
+        } catch (edgeErr) {
+          console.error("Error creating edge:", edgeErr);
+          setNodeError("Node created but failed to create relationship");
+          await fetchSpaceData();
+        }
+      } else {
+        setSpace((prev) => ({
+          ...prev,
+          nodes: [...prev.nodes, nodeData],
+        }));
+
+        await fetchSpaceData();
+        await fetchEdges();
+      }
+
       handleCloseCreateNode();
     } catch (err) {
       setNodeError("Failed to create node");
@@ -178,22 +363,24 @@ function SpaceDetail() {
     setSelectedValues({});
     setExpandedProperties({});
     setNodeError(null);
+    setCreateNodeStep("search");
+    setSelectedSourceNode(null);
+    setRelationSearchQuery("");
+    setRelationSearchResults([]);
+    setSelectedRelation(null);
   };
 
-  const handleCreateEdge = async (sourceNodeId, targetNodeId, propertyId) => {
+  const handleDeleteSpace = async () => {
     try {
-      const response = await axios.post(
-        `/api/nodes/${sourceNodeId}/create_edge/`,
-        {
-          target_node_id: targetNodeId,
-          property_wikidata_id: propertyId,
-        }
-      );
-
-      return response.data;
-    } catch (error) {
-      console.error("Error creating edge:", error);
-      throw error;
+      setDeleteLoading(true);
+      setDeleteError(null);
+      await deleteSpace(spaceId);
+      navigate("/");
+    } catch (err) {
+      setDeleteError(err.message || "Failed to delete space");
+      console.error("Error deleting space:", err);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -230,12 +417,18 @@ function SpaceDetail() {
         </Col>
         <Col xs="auto">
           {space.is_owner ? (
-            <Button
-              variant="primary"
-              onClick={() => navigate(`/spaces/${spaceId}/edit`)}
-            >
-              Edit Space
-            </Button>
+            <>
+              <Button
+                variant="primary"
+                onClick={() => navigate(`/spaces/${spaceId}/edit`)}
+                className="me-2"
+              >
+                Edit Space
+              </Button>
+              <Button variant="danger" onClick={() => setShowDeleteModal(true)}>
+                Delete Space
+              </Button>
+            </>
           ) : space.is_contributor ? (
             <Button
               variant="danger"
@@ -283,10 +476,27 @@ function SpaceDetail() {
               <Card.Title>Tags</Card.Title>
               <div className="tags-container">
                 {space.tags.map((tag) => (
-                  <Badge key={tag.id} bg="secondary" className="me-2 mb-2">
+                  <Badge
+                    key={tag.id}
+                    bg="secondary"
+                    className="me-2 mb-2"
+                    style={{ cursor: "pointer" }}
+                    onClick={() =>
+                      window.open(
+                        `https://www.wikidata.org/wiki/${tag.wikidata_id}`,
+                        "_blank"
+                      )
+                    }
+                  >
                     {tag.name}
+                    <small className="ms-1 text-light">
+                      ({tag.wikidata_id})
+                    </small>
                   </Badge>
                 ))}
+                {space.tags.length === 0 && (
+                  <p className="text-muted">No tags added yet</p>
+                )}
               </div>
             </Card.Body>
           </Card>
@@ -306,6 +516,50 @@ function SpaceDetail() {
                 {space.contributors.length === 0 && (
                   <p className="text-muted">No collaborators yet</p>
                 )}
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+
+      <Row className="mb-4">
+        <Col>
+          <Card>
+            <Card.Body>
+              <Card.Title>Graph View</Card.Title>
+              <div style={{ width: "100%", height: "600px" }}>
+                <ReactFlow
+                  nodes={nodes}
+                  edges={edges}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  nodeTypes={nodeTypes}
+                  fitView
+                  connectionLineStyle={edgeStyles}
+                  defaultEdgeOptions={{
+                    type: "default",
+                    animated: true,
+                    style: edgeStyles,
+                    sourceHandle: "source",
+                    targetHandle: "target",
+                    markerEnd: {
+                      type: "arrowclosed",
+                    },
+                    labelStyle: { fill: "#000", fontWeight: 700 },
+                    labelBgStyle: { fill: "#fff", fillOpacity: 0.8 },
+                    labelBgPadding: [4, 4],
+                    labelBgBorderRadius: 4,
+                  }}
+                >
+                  <Controls />
+                  <MiniMap />
+                  <Background variant="dots" gap={12} size={1} />
+                  <Panel position="top-right">
+                    <Button size="sm" onClick={fetchEdges}>
+                      Refresh Edges
+                    </Button>
+                  </Panel>
+                </ReactFlow>
               </div>
             </Card.Body>
           </Card>
@@ -388,87 +642,181 @@ function SpaceDetail() {
         <Modal.Body>
           {nodeError && <div className="alert alert-danger">{nodeError}</div>}
 
-          {!selectedEntity ? (
-            <>
-              <Form.Group className="mb-3">
-                <Form.Label>Search Wikidata</Form.Label>
-                <div className="d-flex">
-                  <Form.Control
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Enter search term..."
-                  />
-                  <Button
-                    variant="primary"
-                    onClick={handleSearch}
-                    disabled={nodeLoading || searchQuery.length < 2}
-                    className="ms-2"
-                  >
-                    {nodeLoading ? (
-                      <Spinner animation="border" size="sm" />
-                    ) : (
-                      "Search"
-                    )}
-                  </Button>
-                </div>
-              </Form.Group>
+          <div className="mb-4">
+            <h5>1. Search and Select Entity</h5>
+            <Form.Group className="mb-3">
+              <Form.Label>Search Wikidata</Form.Label>
+              <div className="d-flex">
+                <Form.Control
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Enter search term..."
+                />
+                <Button
+                  variant="primary"
+                  onClick={handleSearch}
+                  disabled={nodeLoading || searchQuery.length < 2}
+                  className="ms-2"
+                >
+                  {nodeLoading ? (
+                    <Spinner animation="border" size="sm" />
+                  ) : (
+                    "Search"
+                  )}
+                </Button>
+              </div>
+            </Form.Group>
 
-              {searchResults.length > 0 && (
-                <ListGroup>
-                  {searchResults.map((result) => (
-                    <ListGroup.Item
-                      key={result.wikidata_id}
-                      action
-                      onClick={() => handleEntitySelect(result)}
-                    >
-                      <h6>{result.label}</h6>
-                      {result.description && (
-                        <small className="text-muted">
-                          {result.description}
-                        </small>
-                      )}
-                    </ListGroup.Item>
-                  ))}
-                </ListGroup>
-              )}
-            </>
-          ) : (
+            {searchResults.length > 0 && (
+              <ListGroup>
+                {searchResults.map((result) => (
+                  <ListGroup.Item
+                    key={result.wikidata_id}
+                    action
+                    onClick={() => handleEntitySelect(result)}
+                  >
+                    <h6>{result.label}</h6>
+                    {result.description && (
+                      <small className="text-muted">{result.description}</small>
+                    )}
+                  </ListGroup.Item>
+                ))}
+              </ListGroup>
+            )}
+          </div>
+
+          {selectedEntity && (
             <>
-              <div className="mb-3">
-                <h5>Selected Entity: {selectedEntity.label}</h5>
-                {selectedEntity.description && (
-                  <p className="text-muted">{selectedEntity.description}</p>
-                )}
+              <div className="mb-4">
+                <h5>2. Select Source Node (Optional)</h5>
+                <Form.Group>
+                  <Form.Select
+                    value={selectedSourceNode?.id || ""}
+                    onChange={(e) => {
+                      const nodeId = e.target.value;
+                      if (!nodeId) {
+                        setSelectedSourceNode(null);
+                        return;
+                      }
+                      const node = space.nodes.find(
+                        (n) => n.id === parseInt(nodeId, 10)
+                      );
+                      setSelectedSourceNode(node || null);
+                    }}
+                  >
+                    <option value="">Select a source node...</option>
+                    {space.nodes.map((node) => (
+                      <option key={node.id} value={node.id}>
+                        {node.label}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
               </div>
 
-              <Form.Group className="mb-3">
-                <Form.Label>Select Properties</Form.Label>
-                {properties
-                  .sort((a, b) => b.values.length - a.values.length)
-                  .map((property) => (
-                    <div key={property.wikidata_id} className="mb-3">
-                      <div
-                        className="d-flex align-items-center"
-                        style={{ cursor: "pointer" }}
-                        onClick={() => handlePropertyToggle(property)}
-                      >
-                        <i
-                          className={`bi bi-chevron-${
-                            expandedProperties[property.wikidata_id]
-                              ? "down"
-                              : "right"
-                          } me-2`}
-                        />
-                        <span>
-                          {property.label} ({property.wikidata_id}) -{" "}
-                          {property.values.length} values
-                        </span>
+              {selectedSourceNode && (
+                <div className="mb-4">
+                  <h5>3. Select Relationship Type</h5>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Search and Select Relationship Type</Form.Label>
+                    <div className="position-relative">
+                      <Form.Control
+                        type="text"
+                        value={relationSearchQuery}
+                        onChange={(e) => {
+                          setRelationSearchQuery(e.target.value);
+                          if (e.target.value.length >= 2) {
+                            handleRelationSearch();
+                          } else {
+                            setRelationSearchResults([]);
+                          }
+                        }}
+                        placeholder="Search relationship type..."
+                        className="mb-2"
+                      />
+                      {relationLoading && (
+                        <div className="position-absolute top-0 end-0 mt-2 me-2">
+                          <Spinner animation="border" size="sm" />
+                        </div>
+                      )}
+                      {relationSearchResults.length > 0 && (
+                        <div
+                          className="position-absolute w-100 bg-white border rounded shadow-sm"
+                          style={{
+                            zIndex: 1000,
+                            maxHeight: "200px",
+                            overflowY: "auto",
+                          }}
+                        >
+                          {relationSearchResults.map((result) => (
+                            <div
+                              key={result.wikidata_id}
+                              className={`p-2 cursor-pointer ${
+                                selectedRelation?.wikidata_id ===
+                                result.wikidata_id
+                                  ? "bg-light"
+                                  : ""
+                              }`}
+                              style={{ cursor: "pointer" }}
+                              onClick={() => {
+                                handleRelationSelect(result);
+                                setRelationSearchQuery(result.label);
+                                setRelationSearchResults([]);
+                              }}
+                            >
+                              <div className="fw-bold">{result.label}</div>
+                              {result.description && (
+                                <small className="text-muted">
+                                  {result.description}
+                                </small>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {selectedRelation && (
+                      <div className="mt-2 p-2 bg-light rounded">
+                        <div className="fw-bold">
+                          Selected: {selectedRelation.label}
+                        </div>
+                        {selectedRelation.description && (
+                          <small className="text-muted">
+                            {selectedRelation.description}
+                          </small>
+                        )}
                       </div>
-                      {expandedProperties[property.wikidata_id] &&
-                        property.values.some(
-                          (v) => v && typeof v === "object" && v.id
-                        ) && (
+                    )}
+                  </Form.Group>
+                </div>
+              )}
+
+              <div className="mb-4">
+                <h5>4. Select Properties</h5>
+                <div className="properties-container">
+                  {properties
+                    .sort((a, b) => b.values.length - a.values.length)
+                    .map((property) => (
+                      <div key={property.wikidata_id} className="mb-3">
+                        <div
+                          className="d-flex align-items-center property-header"
+                          style={{ cursor: "pointer" }}
+                          onClick={() => handlePropertyToggle(property)}
+                        >
+                          <i
+                            className={`bi bi-chevron-${
+                              expandedProperties[property.wikidata_id]
+                                ? "down"
+                                : "right"
+                            } me-2`}
+                          />
+                          <span>
+                            {property.label} ({property.wikidata_id}) -{" "}
+                            {property.values.length} values
+                          </span>
+                        </div>
+                        {expandedProperties[property.wikidata_id] && (
                           <div className="ms-4 mt-2">
                             <small className="text-muted">Values:</small>
                             <ul className="list-unstyled ms-3">
@@ -499,9 +847,10 @@ function SpaceDetail() {
                             </ul>
                           </div>
                         )}
-                    </div>
-                  ))}
-              </Form.Group>
+                      </div>
+                    ))}
+                </div>
+              </div>
             </>
           )}
         </Modal.Body>
@@ -513,7 +862,11 @@ function SpaceDetail() {
             <Button
               variant="primary"
               onClick={handleNodeSubmit}
-              disabled={nodeLoading || Object.keys(selectedValues).length === 0}
+              disabled={
+                nodeLoading ||
+                Object.keys(selectedValues).length === 0 ||
+                (selectedSourceNode && !selectedRelation)
+              }
             >
               {nodeLoading ? (
                 <Spinner animation="border" size="sm" />
@@ -522,6 +875,39 @@ function SpaceDetail() {
               )}
             </Button>
           )}
+        </Modal.Footer>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Delete Space</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {deleteError && <Alert variant="danger">{deleteError}</Alert>}
+          <p>
+            Are you sure you want to delete this space? This action cannot be
+            undone.
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleDeleteSpace}
+            disabled={deleteLoading}
+          >
+            {deleteLoading ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-2" />
+                Deleting...
+              </>
+            ) : (
+              "Delete Space"
+            )}
+          </Button>
         </Modal.Footer>
       </Modal>
     </Container>
