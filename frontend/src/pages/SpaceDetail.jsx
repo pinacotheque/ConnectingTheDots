@@ -119,17 +119,62 @@ function SpaceDetail() {
         return;
       }
 
+      const propertyIds = [
+        ...new Set(edgesData.map((edge) => edge.property_wikidata_id)),
+      ];
+      const propertyLabels = {};
+
+      for (const propertyId of propertyIds) {
+        try {
+          const url = "https://www.wikidata.org/w/api.php";
+          const params = new URLSearchParams({
+            origin: "*",
+            action: "wbgetentities",
+            ids: propertyId,
+            props: "labels",
+            languages: "en",
+            format: "json",
+          });
+
+          const response = await fetch(`${url}?${params}`);
+          const data = await response.json();
+
+          if (
+            data.entities &&
+            data.entities[propertyId] &&
+            data.entities[propertyId].labels &&
+            data.entities[propertyId].labels.en
+          ) {
+            propertyLabels[propertyId] =
+              data.entities[propertyId].labels.en.value;
+          } else {
+            propertyLabels[propertyId] = propertyId;
+          }
+        } catch (err) {
+          console.error(
+            `Error fetching label for property ${propertyId}:`,
+            err
+          );
+          propertyLabels[propertyId] = propertyId;
+        }
+      }
+
       const flowEdges = edgesData.map((edge) => ({
         id: edge.id.toString(),
         source: edge.source_node.id.toString(),
         sourceHandle: "source",
         target: edge.target_node.id.toString(),
         targetHandle: "target",
-        label: edge.label || edge.property_wikidata_id,
+        label:
+          propertyLabels[edge.property_wikidata_id] ||
+          edge.property_wikidata_id,
         data: {
           sourceLabel: edge.source_node.label,
           targetLabel: edge.target_node.label,
           propertyId: edge.property_wikidata_id,
+          propertyLabel:
+            propertyLabels[edge.property_wikidata_id] ||
+            edge.property_wikidata_id,
         },
         type: "default",
         animated: true,
@@ -145,6 +190,7 @@ function SpaceDetail() {
 
       setEdges(flowEdges);
     } catch (err) {
+      console.error("Error fetching edges:", err);
       setEdges([]);
     }
   };
