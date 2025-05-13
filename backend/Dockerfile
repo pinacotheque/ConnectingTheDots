@@ -11,6 +11,7 @@ RUN apt-get update && \
 
 COPY ./requirements.txt .
 RUN pip install --upgrade pip
+RUN pip install python-dotenv==1.0.1
 RUN pip install -r requirements.txt
 RUN pip install psycopg[binary] gunicorn
 
