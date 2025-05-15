@@ -19,7 +19,6 @@ import ReactFlow, {
   Background,
   useNodesState,
   useEdgesState,
-  Panel,
   Handle,
   Position,
 } from "reactflow";
@@ -34,6 +33,7 @@ import {
   deleteSpace,
   createEdge,
   getEdges,
+  deleteNode,
 } from "../api/auth";
 import "../styles/spaceDetail.css";
 
@@ -45,7 +45,9 @@ const nodeTypes = {
         borderRadius: "5px",
         backgroundColor: "#fff",
         border: "1px solid #ddd",
+        cursor: "pointer",
       }}
+      onClick={() => data.onNodeClick && data.onNodeClick(data)}
     >
       <Handle
         type="target"
@@ -93,7 +95,6 @@ function SpaceDetail() {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedEntity, setSelectedEntity] = useState(null);
   const [properties, setProperties] = useState([]);
-  const [selectedProperties, setSelectedProperties] = useState({});
   const [nodeLoading, setNodeLoading] = useState(false);
   const [nodeError, setNodeError] = useState(null);
 
@@ -103,12 +104,19 @@ function SpaceDetail() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
-  const [createNodeStep, setCreateNodeStep] = useState("search");
   const [selectedSourceNode, setSelectedSourceNode] = useState(null);
   const [relationSearchQuery, setRelationSearchQuery] = useState("");
   const [relationSearchResults, setRelationSearchResults] = useState([]);
   const [selectedRelation, setSelectedRelation] = useState(null);
   const [relationLoading, setRelationLoading] = useState(false);
+
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [showNodeModal, setShowNodeModal] = useState(false);
+
+  const [showDeleteNodeModal, setShowDeleteNodeModal] = useState(false);
+  const [selectedNodeForAction, setSelectedNodeForAction] = useState(null);
+  const [deleteNodeLoading, setDeleteNodeLoading] = useState(false);
+  const [deleteNodeError, setDeleteNodeError] = useState(null);
 
   const fetchEdges = async () => {
     try {
@@ -202,26 +210,37 @@ function SpaceDetail() {
 
   useEffect(() => {
     if (space?.nodes) {
-      const flowNodes = space.nodes.map((node, index) => ({
-        id: node.id.toString(),
-        type: "default",
-        position: {
-          x: 100 + (index % 3) * 250,
-          y: 100 + Math.floor(index / 3) * 200,
-        },
-        data: {
-          label: node.label,
-          description: node.description,
-          wikidata_id: node.wikidata_id,
-        },
-        connectable: true,
-      }));
+      const layoutNodes = (nodes) => {
+        if (!nodes.length) return [];
 
+        const centerX = 500;
+        const centerY = 300;
+        const radius = nodes.length > 1 ? 200 : 0;
+
+        return nodes.map((node, index) => {
+          // Position nodes in a circle
+          const angle = (index / nodes.length) * 2 * Math.PI;
+          const x = centerX + radius * Math.cos(angle);
+          const y = centerY + radius * Math.sin(angle);
+
+          return {
+            id: node.id.toString(),
+            type: "default",
+            position: { x, y },
+            data: {
+              id: node.id.toString(),
+              label: node.label,
+              description: node.description,
+              wikidata_id: node.wikidata_id,
+              onNodeClick: handleNodeClick,
+            },
+            connectable: true,
+          };
+        });
+      };
+
+      const flowNodes = layoutNodes(space.nodes);
       setNodes(flowNodes);
-
-      if (flowNodes.length > 0) {
-        fetchEdges();
-      }
     }
   }, [space?.nodes, setNodes]);
 
@@ -288,9 +307,7 @@ function SpaceDetail() {
       const properties = await getWikidataProperties(entity.wikidata_id);
       setProperties(properties);
       if (space.nodes && space.nodes.length > 0) {
-        setCreateNodeStep("selectSource");
       } else {
-        setCreateNodeStep("selectRelation");
       }
     } catch (err) {
       setNodeError("Failed to fetch entity properties");
@@ -298,11 +315,6 @@ function SpaceDetail() {
     } finally {
       setNodeLoading(false);
     }
-  };
-
-  const handleSourceNodeSelect = (node) => {
-    setSelectedSourceNode(node);
-    setCreateNodeStep("selectRelation");
   };
 
   const handleRelationSearch = async () => {
@@ -405,11 +417,9 @@ function SpaceDetail() {
     setSearchResults([]);
     setSelectedEntity(null);
     setProperties([]);
-    setSelectedProperties({});
     setSelectedValues({});
     setExpandedProperties({});
     setNodeError(null);
-    setCreateNodeStep("search");
     setSelectedSourceNode(null);
     setRelationSearchQuery("");
     setRelationSearchResults([]);
@@ -427,6 +437,59 @@ function SpaceDetail() {
       console.error("Error deleting space:", err);
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleNodeClick = (nodeData) => {
+    const fullNodeData = space.nodes.find(
+      (node) => node.id.toString() === nodeData.id
+    );
+    setSelectedNode(fullNodeData);
+    setShowNodeModal(true);
+  };
+
+  const handleDeleteNodeClick = (node) => {
+    setSelectedNodeForAction(node);
+    setShowDeleteNodeModal(true);
+  };
+
+  const handleDeleteNodeConfirm = async () => {
+    if (!selectedNodeForAction) return;
+
+    setDeleteNodeLoading(true);
+    setDeleteNodeError(null);
+    try {
+      const nodeId =
+        typeof selectedNodeForAction.id === "string"
+          ? parseInt(selectedNodeForAction.id, 10)
+          : selectedNodeForAction.id;
+
+      await deleteNode(nodeId);
+
+      setSpace((prev) => ({
+        ...prev,
+        nodes: prev.nodes.filter(
+          (node) => node.id !== selectedNodeForAction.id
+        ),
+      }));
+      setEdges((prev) =>
+        prev.filter(
+          (edge) =>
+            edge.source !== selectedNodeForAction.id.toString() &&
+            edge.target !== selectedNodeForAction.id.toString()
+        )
+      );
+
+      setShowDeleteNodeModal(false);
+      setSelectedNodeForAction(null);
+
+      await fetchSpaceData();
+      await fetchEdges();
+    } catch (err) {
+      console.error("Error deleting node:", err);
+      setDeleteNodeError(err.detail || "Failed to delete node");
+    } finally {
+      setDeleteNodeLoading(false);
     }
   };
 
@@ -524,7 +587,7 @@ function SpaceDetail() {
                 {space.tags.map((tag) => (
                   <Badge
                     key={tag.id}
-                    bg="secondary"
+                    bg="success"
                     className="me-2 mb-2"
                     style={{ cursor: "pointer" }}
                     onClick={() =>
@@ -581,6 +644,8 @@ function SpaceDetail() {
                   onEdgesChange={onEdgesChange}
                   nodeTypes={nodeTypes}
                   fitView
+                  fitViewOptions={{ padding: 0.2 }}
+                  defaultViewport={{ x: 0, y: 0, zoom: 1 }}
                   connectionLineStyle={edgeStyles}
                   defaultEdgeOptions={{
                     type: "default",
@@ -600,11 +665,6 @@ function SpaceDetail() {
                   <Controls />
                   <MiniMap />
                   <Background variant="dots" gap={12} size={1} />
-                  <Panel position="top-right">
-                    <Button size="sm" onClick={fetchEdges}>
-                      Refresh Edges
-                    </Button>
-                  </Panel>
                 </ReactFlow>
               </div>
             </Card.Body>
@@ -632,8 +692,26 @@ function SpaceDetail() {
                               Wikidata ID: {node.wikidata_id}
                             </div>
                           </div>
-                          <div className="text-muted small">
-                            Created by {node.creator.username}
+                          <div>
+                            <div className="text-muted small mb-2">
+                              Created by {node.creator.username}
+                            </div>
+                            {(space.is_owner ||
+                              (space.is_contributor &&
+                                node.creator.id ===
+                                  parseInt(
+                                    localStorage.getItem("userId")
+                                  ))) && (
+                              <div className="d-flex">
+                                <Button
+                                  variant="outline-danger"
+                                  size="sm"
+                                  onClick={() => handleDeleteNodeClick(node)}
+                                >
+                                  Delete
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -924,7 +1002,6 @@ function SpaceDetail() {
         </Modal.Footer>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>Delete Space</Modal.Title>
@@ -952,6 +1029,132 @@ function SpaceDetail() {
               </>
             ) : (
               "Delete Space"
+            )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showNodeModal} onHide={() => setShowNodeModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>{selectedNode?.label}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {selectedNode && (
+            <>
+              <p>
+                <strong>Description:</strong> {selectedNode.description}
+              </p>
+              <p>
+                <strong>Wikidata ID:</strong> {selectedNode.wikidata_id}
+              </p>
+
+              {selectedNode.creator && (
+                <p>
+                  <strong>Created by:</strong> {selectedNode.creator.username}
+                </p>
+              )}
+
+              {Object.entries(selectedNode.properties || {}).length > 0 && (
+                <div className="mt-3">
+                  <h6>Properties:</h6>
+                  <ListGroup>
+                    {Object.entries(selectedNode.properties).map(
+                      ([propId, propData]) => (
+                        <ListGroup.Item key={propId}>
+                          <div className="fw-bold">{propData.label}</div>
+                          {propData.values.length > 0 ? (
+                            <div>
+                              {propData.values.map((value, index) => (
+                                <Badge
+                                  key={index}
+                                  bg="info"
+                                  className="me-2 mt-1"
+                                >
+                                  {value}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-muted">No values</div>
+                          )}
+                        </ListGroup.Item>
+                      )
+                    )}
+                  </ListGroup>
+                </div>
+              )}
+
+              <div className="mt-3">
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  href={`https://www.wikidata.org/wiki/${selectedNode.wikidata_id}`}
+                  target="_blank"
+                >
+                  View on Wikidata
+                </Button>
+              </div>
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          {(space.is_owner ||
+            (space.is_contributor &&
+              selectedNode.creator?.id ===
+                parseInt(localStorage.getItem("userId")))) && (
+            <div className="mt-2">
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  setShowNodeModal(false);
+                  handleDeleteNodeClick(selectedNode);
+                }}
+              >
+                Delete Node
+              </Button>
+            </div>
+          )}
+          <Button variant="secondary" onClick={() => setShowNodeModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal
+        show={showDeleteNodeModal}
+        onHide={() => setShowDeleteNodeModal(false)}
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Delete Node</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {deleteNodeError && <Alert variant="danger">{deleteNodeError}</Alert>}
+          <p>
+            Are you sure you want to delete the node "
+            {selectedNodeForAction?.label}"? This will also remove all
+            relationships connected to this node.
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            variant="secondary"
+            onClick={() => setShowDeleteNodeModal(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleDeleteNodeConfirm}
+            disabled={deleteNodeLoading}
+          >
+            {deleteNodeLoading ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-2" />
+                Deleting...
+              </>
+            ) : (
+              "Delete Node"
             )}
           </Button>
         </Modal.Footer>

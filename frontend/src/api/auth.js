@@ -212,3 +212,12 @@ export const getTags = async () => {
         throw error.response?.data || { message: 'An error occurred while fetching tags' };
     }
 };
+
+export const deleteNode = async (nodeId) => {
+    try {
+        const response = await API.delete(`/nodes/${nodeId}/`);
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: 'An error occurred while deleting the node' };
+    }
+};

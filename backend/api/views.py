@@ -360,6 +360,56 @@ class NodeViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(creator=self.request.user)
     
+    def destroy(self, request, *args, **kwargs):
+        try:
+            pk = self.kwargs.get('pk')
+            
+            try:
+                node = Node.objects.get(id=pk)
+            except (Node.DoesNotExist, ValueError, TypeError):
+                return Response(
+                    {
+                        "detail": f"Node with ID {pk} not found.",
+                        "code": "node_not_found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            if node.creator != request.user and node.space.owner != request.user:
+                return Response(
+                    {
+                        "detail": "You do not have permission to delete this node.",
+                        "code": "permission_denied"
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            Edge.objects.filter(Q(source_node=node) | Q(target_node=node)).delete()
+            
+            node.delete()
+            
+            return Response(
+                {
+                    "detail": "Node successfully deleted.",
+                    "code": "node_deleted"
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"Error deleting node: {str(e)}\n{error_trace}")
+            
+            return Response(
+                {
+                    "detail": "An error occurred while deleting the node.",
+                    "code": "server_error",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     @action(detail=True, methods=['post'])
     def create_edge(self, request, pk=None):
         source_node_id = request.data.get('source_node_id')

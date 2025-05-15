@@ -12,7 +12,7 @@ import {
 } from "react-bootstrap";
 import "../styles/home.css";
 import searchIcon from "../assets/search.svg";
-import { getSpaces, joinSpace, leaveSpace, getTags } from "../api/auth";
+import { getSpaces, getTags } from "../api/auth";
 import { Link } from "react-router-dom";
 
 export default function Home() {
@@ -23,7 +23,6 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState([]);
-  const [joiningSpace, setJoiningSpace] = useState(null);
 
   useEffect(() => {
     fetchSpaces();
@@ -56,34 +55,10 @@ export default function Home() {
     }
   };
 
-  const handleJoinSpace = async (spaceId) => {
-    try {
-      setJoiningSpace(spaceId);
-      await joinSpace(spaceId);
-      await fetchSpaces();
-    } catch (err) {
-      setError(err.message || "Failed to join space");
-    } finally {
-      setJoiningSpace(null);
-    }
-  };
-
-  const handleLeaveSpace = async (spaceId) => {
-    try {
-      setJoiningSpace(spaceId);
-      await leaveSpace(spaceId);
-      await fetchSpaces();
-    } catch (err) {
-      setError(err.message || "Failed to leave space");
-    } finally {
-      setJoiningSpace(null);
-    }
-  };
-
   const handleTagSelect = (tagId) => {
-    setSelectedTags(prevSelectedTags => {
+    setSelectedTags((prevSelectedTags) => {
       if (prevSelectedTags.includes(tagId)) {
-        return prevSelectedTags.filter(id => id !== tagId);
+        return prevSelectedTags.filter((id) => id !== tagId);
       } else {
         return [...prevSelectedTags, tagId];
       }
@@ -94,18 +69,17 @@ export default function Home() {
     setSelectedTags([]);
   };
 
-  const filteredSpaces = spaces.filter(space => {
-    // Text search filter
-    const matchesSearchQuery = 
-      searchQuery === "" || 
+  const filteredSpaces = spaces.filter((space) => {
+    const matchesSearchQuery =
+      searchQuery === "" ||
       space.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       space.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      space.tags.some(tag => tag.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    // Tag filter
-    const matchesTags = 
-      selectedTags.length === 0 || 
-      space.tags.some(tag => selectedTags.includes(tag.id));
+      space.tags.some((tag) =>
+        tag.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    const matchesTags =
+      selectedTags.length === 0 ||
+      space.tags.some((tag) => selectedTags.includes(tag.id));
 
     return matchesSearchQuery && matchesTags;
   });
@@ -139,16 +113,12 @@ export default function Home() {
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h5>Filter by Tags</h5>
             {selectedTags.length > 0 && (
-              <Button 
-                variant="outline-secondary" 
-                size="sm" 
-                onClick={clearTagFilters}
-              >
+              <Button variant="outline" size="sm" onClick={clearTagFilters}>
                 Clear Filters
               </Button>
             )}
           </div>
-          
+
           {tagsLoading ? (
             <p className="text-muted">Loading tags...</p>
           ) : (
@@ -157,7 +127,7 @@ export default function Home() {
                 tags.map((tag) => (
                   <Badge
                     key={tag.id}
-                    bg={selectedTags.includes(tag.id) ? "primary" : "secondary"}
+                    bg={selectedTags.includes(tag.id) ? "primary" : "success"}
                     className="me-2 mb-2 clickable-tag"
                     onClick={() => handleTagSelect(tag.id)}
                   >
@@ -182,42 +152,29 @@ export default function Home() {
               {filteredSpaces.map((space) => (
                 <Col key={space.id} md={6} lg={12} className="mb-4">
                   <Card
-                    className="h-100 shadow-sm space"
+                    className="h-100 shadow-sm spaceCard"
                     as={Link}
                     to={`/spaces/${space.id}`}
                   >
                     <Card.Body>
-                      <Card.Title>{space.title}</Card.Title>
+                      <h4>{space.title}</h4>
                       <Card.Text>{space.description}</Card.Text>
                       <div className="mb-3">
                         {space.tags.map((tag) => (
-                          <Badge 
-                            key={tag.id} 
-                            bg={selectedTags.includes(tag.id) ? "primary" : "secondary"} 
+                          <Badge
+                            key={tag.id}
+                            bg={
+                              selectedTags.includes(tag.id)
+                                ? "primary"
+                                : "success"
+                            }
                             className="me-1"
                           >
                             {tag.name}
                           </Badge>
                         ))}
                       </div>
-                      {!space.is_owner && (
-                        <Button
-                          variant="primary"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            space.is_contributor
-                              ? handleLeaveSpace(space.id)
-                              : handleJoinSpace(space.id);
-                          }}
-                        >
-                          {joiningSpace === space.id
-                            ? "Processing..."
-                            : space.is_contributor
-                            ? "Leave Space"
-                            : "Join Space"}
-                        </Button>
-                      )}
+                      Created by {space.owner.username}
                     </Card.Body>
                   </Card>
                 </Col>
