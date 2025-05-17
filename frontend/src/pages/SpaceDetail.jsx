@@ -36,6 +36,7 @@ import {
   deleteNode,
 } from "../api/auth";
 import "../styles/spaceDetail.css";
+import { calculateNodePositions } from "../utils/nodePositioner";
 
 const nodeTypes = {
   default: ({ data }) => (
@@ -109,6 +110,8 @@ function SpaceDetail() {
   const [relationSearchResults, setRelationSearchResults] = useState([]);
   const [selectedRelation, setSelectedRelation] = useState(null);
   const [relationLoading, setRelationLoading] = useState(false);
+  const [useCustomRelation, setUseCustomRelation] = useState(false);
+  const [customRelationText, setCustomRelationText] = useState("");
 
   const [selectedNode, setSelectedNode] = useState(null);
   const [showNodeModal, setShowNodeModal] = useState(false);
@@ -129,7 +132,8 @@ function SpaceDetail() {
 
       const propertyIds = [
         ...new Set(edgesData.map((edge) => edge.property_wikidata_id)),
-      ];
+      ].filter((id) => !id.startsWith("custom:"));
+
       const propertyLabels = {};
 
       for (const propertyId of propertyIds) {
@@ -167,34 +171,48 @@ function SpaceDetail() {
         }
       }
 
-      const flowEdges = edgesData.map((edge) => ({
-        id: edge.id.toString(),
-        source: edge.source_node.id.toString(),
-        sourceHandle: "source",
-        target: edge.target_node.id.toString(),
-        targetHandle: "target",
-        label:
-          propertyLabels[edge.property_wikidata_id] ||
-          edge.property_wikidata_id,
-        data: {
-          sourceLabel: edge.source_node.label,
-          targetLabel: edge.target_node.label,
-          propertyId: edge.property_wikidata_id,
-          propertyLabel:
+      const flowEdges = edgesData.map((edge) => {
+        let edgeLabel;
+
+        if (edge.custom_label) {
+          edgeLabel = edge.custom_label;
+        } else if (edge.property_wikidata_id.startsWith("custom:")) {
+          edgeLabel = edge.property_wikidata_id.replace("custom:", "");
+        } else {
+          edgeLabel =
             propertyLabels[edge.property_wikidata_id] ||
-            edge.property_wikidata_id,
-        },
-        type: "default",
-        animated: true,
-        style: { stroke: "#FF5733", strokeWidth: 2 },
-        markerEnd: {
-          type: "arrowclosed",
-        },
-        labelStyle: { fill: "#000", fontWeight: 700 },
-        labelBgStyle: { fill: "#fff", fillOpacity: 0.8 },
-        labelBgPadding: [4, 4],
-        labelBgBorderRadius: 4,
-      }));
+            edge.property_wikidata_id;
+        }
+
+        return {
+          id: edge.id.toString(),
+          source: edge.source_node.id.toString(),
+          sourceHandle: "source",
+          target: edge.target_node.id.toString(),
+          targetHandle: "target",
+          label: edgeLabel,
+          data: {
+            sourceLabel: edge.source_node.label,
+            targetLabel: edge.target_node.label,
+            propertyId: edge.property_wikidata_id,
+            propertyLabel: edgeLabel,
+            isCustom:
+              !!edge.custom_label ||
+              edge.property_wikidata_id.startsWith("custom:"),
+          },
+          type: "default",
+          animated: false,
+          style: edgeStyles,
+          markerEnd: {
+            type: "arrowclosed",
+            color: "#FF5733",
+          },
+          labelStyle: { fill: "#000", fontWeight: 700 },
+          labelBgStyle: { fill: "#fff", fillOpacity: 0.8 },
+          labelBgPadding: [4, 4],
+          labelBgBorderRadius: 4,
+        };
+      });
 
       setEdges(flowEdges);
     } catch (err) {
@@ -210,39 +228,27 @@ function SpaceDetail() {
 
   useEffect(() => {
     if (space?.nodes) {
-      const layoutNodes = (nodes) => {
-        if (!nodes.length) return [];
+      const prepareNodes = () => {
+        if (!space.nodes.length) return [];
 
-        const centerX = 500;
-        const centerY = 300;
-        const radius = nodes.length > 1 ? 200 : 0;
-
-        return nodes.map((node, index) => {
-          // Position nodes in a circle
-          const angle = (index / nodes.length) * 2 * Math.PI;
-          const x = centerX + radius * Math.cos(angle);
-          const y = centerY + radius * Math.sin(angle);
-
-          return {
+        const mappedNodes = space.nodes.map((node) => ({
+          id: node.id.toString(),
+          data: {
             id: node.id.toString(),
-            type: "default",
-            position: { x, y },
-            data: {
-              id: node.id.toString(),
-              label: node.label,
-              description: node.description,
-              wikidata_id: node.wikidata_id,
-              onNodeClick: handleNodeClick,
-            },
-            connectable: true,
-          };
-        });
+            label: node.label,
+            description: node.description,
+            wikidata_id: node.wikidata_id,
+            onNodeClick: handleNodeClick,
+          },
+        }));
+
+        return calculateNodePositions(mappedNodes, edges);
       };
 
-      const flowNodes = layoutNodes(space.nodes);
+      const flowNodes = prepareNodes();
       setNodes(flowNodes);
     }
-  }, [space?.nodes, setNodes]);
+  }, [space?.nodes, edges, setNodes]);
 
   const fetchSpaceData = async () => {
     try {
@@ -334,6 +340,7 @@ function SpaceDetail() {
 
   const handleRelationSelect = (relation) => {
     setSelectedRelation(relation);
+    setUseCustomRelation(relation.isCustom || false);
   };
 
   const handlePropertyToggle = (property) => {
@@ -382,7 +389,8 @@ function SpaceDetail() {
           await createEdge(
             sourceNodeId,
             targetNodeId,
-            selectedRelation.wikidata_id
+            selectedRelation.wikidata_id,
+            selectedRelation.isCustom ? selectedRelation.label : undefined
           );
 
           await fetchSpaceData();
@@ -424,6 +432,8 @@ function SpaceDetail() {
     setRelationSearchQuery("");
     setRelationSearchResults([]);
     setSelectedRelation(null);
+    setUseCustomRelation(false);
+    setCustomRelationText("");
   };
 
   const handleDeleteSpace = async () => {
@@ -649,12 +659,13 @@ function SpaceDetail() {
                   connectionLineStyle={edgeStyles}
                   defaultEdgeOptions={{
                     type: "default",
-                    animated: true,
+                    animated: false,
                     style: edgeStyles,
                     sourceHandle: "source",
                     targetHandle: "target",
                     markerEnd: {
                       type: "arrowclosed",
+                      color: "#FF5733",
                     },
                     labelStyle: { fill: "#000", fontWeight: 700 },
                     labelBgStyle: { fill: "#fff", fillOpacity: 0.8 },
@@ -855,8 +866,9 @@ function SpaceDetail() {
                           } else {
                             setRelationSearchResults([]);
                           }
+                          setSelectedRelation(null);
                         }}
-                        placeholder="Search relationship type..."
+                        placeholder="Search relationship type or enter custom text..."
                         className="mb-2"
                       />
                       {relationLoading && (
@@ -864,7 +876,7 @@ function SpaceDetail() {
                           <Spinner animation="border" size="sm" />
                         </div>
                       )}
-                      {relationSearchResults.length > 0 && (
+                      {relationSearchQuery.length >= 2 && !selectedRelation && (
                         <div
                           className="position-absolute w-100 bg-white border rounded shadow-sm"
                           style={{
@@ -873,30 +885,53 @@ function SpaceDetail() {
                             overflowY: "auto",
                           }}
                         >
-                          {relationSearchResults.map((result) => (
-                            <div
-                              key={result.wikidata_id}
-                              className={`p-2 cursor-pointer ${
-                                selectedRelation?.wikidata_id ===
-                                result.wikidata_id
-                                  ? "bg-light"
-                                  : ""
-                              }`}
-                              style={{ cursor: "pointer" }}
-                              onClick={() => {
-                                handleRelationSelect(result);
-                                setRelationSearchQuery(result.label);
-                                setRelationSearchResults([]);
-                              }}
-                            >
-                              <div className="fw-bold">{result.label}</div>
-                              {result.description && (
-                                <small className="text-muted">
-                                  {result.description}
-                                </small>
-                              )}
+                          <div
+                            className="p-2 cursor-pointer bg-light"
+                            style={{ cursor: "pointer" }}
+                            onClick={() => {
+                              handleRelationSelect({
+                                wikidata_id: `custom:${Date.now()}`,
+                                label: relationSearchQuery,
+                                isCustom: true,
+                              });
+                              setRelationSearchResults([]);
+                            }}
+                          >
+                            <div className="fw-bold">
+                              Use "{relationSearchQuery}" as relationship
                             </div>
-                          ))}
+                          </div>
+
+                          {relationSearchResults.length > 0 ? (
+                            relationSearchResults.map((result) => (
+                              <div
+                                key={result.wikidata_id}
+                                className={`p-2 cursor-pointer ${
+                                  selectedRelation?.wikidata_id ===
+                                  result.wikidata_id
+                                    ? "bg-light"
+                                    : ""
+                                }`}
+                                style={{ cursor: "pointer" }}
+                                onClick={() => {
+                                  handleRelationSelect(result);
+                                  setRelationSearchQuery(result.label);
+                                  setRelationSearchResults([]);
+                                }}
+                              >
+                                <div className="fw-bold">{result.label}</div>
+                                {result.description && (
+                                  <small className="text-muted">
+                                    {result.description}
+                                  </small>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="p-2 text-muted">
+                              No Wikidata results found
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -904,12 +939,14 @@ function SpaceDetail() {
                       <div className="mt-2 p-2 bg-light rounded">
                         <div className="fw-bold">
                           Selected: {selectedRelation.label}
+                          {selectedRelation.isCustom && " (Custom)"}
                         </div>
-                        {selectedRelation.description && (
-                          <small className="text-muted">
-                            {selectedRelation.description}
-                          </small>
-                        )}
+                        {!selectedRelation.isCustom &&
+                          selectedRelation.description && (
+                            <small className="text-muted">
+                              {selectedRelation.description}
+                            </small>
+                          )}
                       </div>
                     )}
                   </Form.Group>
@@ -989,7 +1026,9 @@ function SpaceDetail() {
               disabled={
                 nodeLoading ||
                 Object.keys(selectedValues).length === 0 ||
-                (selectedSourceNode && !selectedRelation)
+                (selectedSourceNode &&
+                  !selectedRelation &&
+                  !(useCustomRelation && customRelationText.trim().length > 0))
               }
             >
               {nodeLoading ? (
@@ -1100,7 +1139,7 @@ function SpaceDetail() {
         <Modal.Footer>
           {(space.is_owner ||
             (space.is_contributor &&
-              selectedNode.creator?.id ===
+              selectedNode?.creator?.id ===
                 parseInt(localStorage.getItem("userId")))) && (
             <div className="mt-2">
               <Button

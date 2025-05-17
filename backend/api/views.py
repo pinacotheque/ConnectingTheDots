@@ -39,6 +39,8 @@ def login(request):
         return Response({
             "message": "Login successful",
             "token": str(refresh.access_token),
+            "refresh": str(refresh),
+            "expires_in": 86400
         })
     else:
         return Response({"message": "Invalid credentials"}, status=401)
@@ -415,6 +417,7 @@ class NodeViewSet(viewsets.ModelViewSet):
         source_node_id = request.data.get('source_node_id')
         target_node_id = request.data.get('target_node_id')
         property_wikidata_id = request.data.get('property_wikidata_id')
+        custom_label = request.data.get('custom_label')
         
         if not source_node_id or not target_node_id or not property_wikidata_id:
             return Response(
@@ -434,7 +437,8 @@ class NodeViewSet(viewsets.ModelViewSet):
         edge = Edge.objects.create(
             source_node=source_node,
             target_node=target_node,
-            property_wikidata_id=property_wikidata_id
+            property_wikidata_id=property_wikidata_id,
+            custom_label=custom_label
         )
         
         serializer = EdgeSerializer(edge)
@@ -459,3 +463,21 @@ def user_profile(request):
         "owned_spaces": owned_spaces_serializer.data,
         "contributed_spaces": contributed_spaces_serializer.data
     })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def refresh_token(request):
+    refresh_token = request.data.get('refresh')
+    if not refresh_token:
+        return Response({"message": "Refresh token is required"}, status=400)
+    
+    try:
+        refresh = RefreshToken(refresh_token)
+        access_token = str(refresh.access_token)
+        
+        return Response({
+            "token": access_token,
+            "expires_in": 86400
+        })
+    except Exception as e:
+        return Response({"message": "Invalid refresh token"}, status=401)

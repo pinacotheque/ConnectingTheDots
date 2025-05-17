@@ -1,5 +1,13 @@
 import axios from "axios";
-import { setToken, removeToken, getAuthHeader } from "../utils/tokenManager";
+import {
+    setToken,
+    removeToken,
+    getAuthHeader,
+    getRefreshToken,
+    setRefreshToken,
+    isTokenExpired,
+    setTokenExpiry
+} from "../utils/tokenManager";
 import config from "../config";
 
 const API = axios.create({
@@ -9,8 +17,69 @@ const API = axios.create({
     },
 });
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
+export const refreshToken = async () => {
+    const refresh = getRefreshToken();
+    if (!refresh) {
+        throw new Error('No refresh token available');
+    }
+
+    try {
+        const response = await axios.post(`${config.apiUrl}/refresh-token/`, {
+            refresh
+        });
+        const { token, expires_in } = response.data;
+
+        setToken(token);
+        setTokenExpiry(expires_in);
+        return token;
+    } catch (error) {
+        removeToken();
+        throw error;
+    }
+};
+
 API.interceptors.request.use(
-    (config) => {
+    async (config) => {
+        if (isTokenExpired() && !config.url.includes('/refresh-token/') && !config.url.includes('/login/')) {
+            if (!isRefreshing) {
+                isRefreshing = true;
+                try {
+                    await refreshToken();
+                    isRefreshing = false;
+                    processQueue(null, getAuthHeader());
+                } catch (error) {
+                    processQueue(error, null);
+                    isRefreshing = false;
+                    removeToken();
+                    window.location.href = '/login';
+                    return Promise.reject(error);
+                }
+            } else {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then(token => {
+                    config.headers.Authorization = token;
+                    return config;
+                }).catch(error => {
+                    return Promise.reject(error);
+                });
+            }
+        }
+
         const authHeader = getAuthHeader();
         if (authHeader) {
             config.headers.Authorization = authHeader;
@@ -26,8 +95,10 @@ API.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-            removeToken();
-            window.location.href = '/login';
+            if (!error.config.url.includes('/refresh-token/')) {
+                removeToken();
+                window.location.href = '/login';
+            }
         }
         return Promise.reject(error);
     }
@@ -45,9 +116,10 @@ export const registerUser = async (userData) => {
 export const loginUser = async (credentials) => {
     try {
         const response = await API.post("/login/", credentials);
-        const { access } = response.data;
-        if (access) {
-            setToken(access);
+        if (response.data.token) {
+            setToken(response.data.token);
+            setRefreshToken(response.data.refresh);
+            setTokenExpiry(response.data.expires_in);
         }
         return response.data;
     } catch (error) {
@@ -161,12 +233,13 @@ export const deleteSpace = async (spaceId) => {
     }
 };
 
-export const createEdge = async (sourceNodeId, targetNodeId, propertyId) => {
+export const createEdge = async (sourceNodeId, targetNodeId, propertyId, customLabel) => {
     try {
         const response = await API.post(`/nodes/${sourceNodeId}/create_edge/`, {
             source_node_id: sourceNodeId,
             target_node_id: targetNodeId,
             property_wikidata_id: propertyId,
+            custom_label: customLabel
         });
         return response.data;
     } catch (error) {

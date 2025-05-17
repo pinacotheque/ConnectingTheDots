@@ -3,6 +3,7 @@ import { Container, Form } from "react-bootstrap";
 import "../styles/auth.css";
 import { loginUser } from "../api/auth";
 import { useNavigate } from "react-router-dom";
+import { setToken, setRefreshToken, setTokenExpiry } from "../utils/tokenManager";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -12,8 +13,12 @@ export default function Login() {
     e.preventDefault();
     try {
       const res = await loginUser(form);
-      localStorage.setItem("token", res.token);
-      navigate("/");
+      if (res.token) {
+        setToken(res.token);
+        setRefreshToken(res.refresh);
+        setTokenExpiry(res.expires_in);
+        navigate("/");
+      }
     } catch (error) {
       console.error("Login failed:", error.message);
     }

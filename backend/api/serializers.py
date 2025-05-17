@@ -71,7 +71,7 @@ class EdgeSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Edge
-        fields = ('id', 'source_node', 'target_node', 'property_wikidata_id', 'created_at')
+        fields = ('id', 'source_node', 'target_node', 'property_wikidata_id', 'custom_label', 'created_at')
         read_only_fields = ('source_node', 'target_node')
 
 class SpaceSerializer(serializers.ModelSerializer):

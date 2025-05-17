@@ -45,6 +45,7 @@ class Edge(models.Model):
     source_node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='outgoing_edges')
     target_node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='incoming_edges')
     property_wikidata_id = models.CharField(max_length=20)
+    custom_label = models.CharField(max_length=100, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -52,4 +53,5 @@ class Edge(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.source_node} -> {self.target_node} ({self.property_wikidata_id})"
+        label = self.custom_label if self.custom_label else self.property_wikidata_id
+        return f"{self.source_node} -> {self.target_node} ({label})"
