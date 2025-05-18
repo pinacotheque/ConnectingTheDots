@@ -198,6 +198,7 @@ class SpaceViewSet(viewsets.ModelViewSet):
                         'ids': prop_id,
                         'languages': 'en',
                         'format': 'json',
+                        'limit': 50,
                     }
                     prop_response = requests.get(prop_url, params=prop_params)
                     prop_data = prop_response.json()
