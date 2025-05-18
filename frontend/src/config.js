@@ -1,10 +1,8 @@
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 
-const runtimeConfig = typeof window !== 'undefined' && window.ENV ? window.ENV : {};
-
 
 const config = {
-    apiUrl: 'http://localhost:8000/api',
+    apiUrl: isProduction ? 'http://13.61.57.200:8000/api' : 'http://localhost:8000/api',
     appName: 'Connecting The Dots',
     appVersion: '1.0.0',
 };
