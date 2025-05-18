@@ -54,7 +54,7 @@ export const refreshToken = async () => {
 
 API.interceptors.request.use(
     async (config) => {
-        if (isTokenExpired() && !config.url.includes('/refresh-token/') && !config.url.includes('/login/')) {
+        if (isTokenExpired() && !config.url.includes('/refresh-token/') && !config.url.includes('/login/') && !config.url.includes('/register/')) {
             if (!isRefreshing) {
                 isRefreshing = true;
                 try {
