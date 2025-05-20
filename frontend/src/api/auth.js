@@ -190,7 +190,7 @@ export const searchWikidata = async (query) => {
 
 export const getWikidataProperties = async (entityId) => {
     try {
-        const response = await API.get(`spaces/get_wikidata_properties/?entity_id=${entityId}`);
+        const response = await API.get(`/spaces/get_wikidata_properties/?entity_id=${entityId}`);
         return response.data;
     } catch (error) {
         console.error('Error fetching Wikidata properties:', error);
