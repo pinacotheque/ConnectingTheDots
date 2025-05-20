@@ -180,7 +180,7 @@ export const getSpace = async (spaceId) => {
 
 export const searchWikidata = async (query) => {
     try {
-        const response = await API.get(`spaces/search_wikidata/?q=${encodeURIComponent(query)}`);
+        const response = await API.get(`/spaces/search_wikidata/?q=${encodeURIComponent(query)}`);
         return response.data;
     } catch (error) {
         console.error('Error searching Wikidata:', error);

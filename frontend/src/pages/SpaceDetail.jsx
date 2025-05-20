@@ -537,13 +537,6 @@ function SpaceDetail() {
         <Col xs="auto">
           {space.is_owner ? (
             <>
-              <Button
-                variant="primary"
-                onClick={() => navigate(`/spaces/${spaceId}/edit`)}
-                className="me-2"
-              >
-                Edit Space
-              </Button>
               <Button variant="danger" onClick={() => setShowDeleteModal(true)}>
                 Delete Space
               </Button>
