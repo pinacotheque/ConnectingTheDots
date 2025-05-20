@@ -13,6 +13,7 @@ from django.contrib.auth.models import User
 from django.db import transaction
 import requests
 from django.db.models import Q
+import json
 
 
 @api_view(['POST'])
@@ -187,7 +188,18 @@ class SpaceViewSet(viewsets.ModelViewSet):
 
         try:
             response = requests.get(url, params=params)
-            data = response.json()
+            response.raise_for_status() 
+            
+            if not response.text:
+                return Response({"error": "Empty response from Wikidata API"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+            try:
+                data = response.json()
+            except json.JSONDecodeError as e:
+                return Response({"error": f"Invalid JSON response from Wikidata API: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            if 'error' in data:
+                return Response({"error": f"Wikidata API error: {data['error']}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             properties = []
             for prop_id, claims in data.get('claims', {}).items():
@@ -199,21 +211,37 @@ class SpaceViewSet(viewsets.ModelViewSet):
                         'languages': 'en',
                         'format': 'json',
                     }
-                    prop_response = requests.get(prop_url, params=prop_params)
-                    prop_data = prop_response.json()
+                    try:
+                        prop_response = requests.get(prop_url, params=prop_params)
+                        prop_response.raise_for_status()
+                        
+                        if not prop_response.text:
+                            continue
+                            
+                        try:
+                            prop_data = prop_response.json()
+                        except json.JSONDecodeError:
+                            continue
 
-                    prop_label = prop_data.get('entities', {}).get(prop_id, {}).get('labels', {}).get('en', {}).get('value', prop_id)
+                        if 'error' in prop_data:
+                            continue
 
-                    property_info = {
-                        'wikidata_id': prop_id,
-                        'label': prop_label,
-                        'values': [claim.get('mainsnak', {}).get('datavalue', {}).get('value', {}) for claim in claims]
-                    }
-                    properties.append(property_info)
+                        prop_label = prop_data.get('entities', {}).get(prop_id, {}).get('labels', {}).get('en', {}).get('value', prop_id)
+
+                        property_info = {
+                            'wikidata_id': prop_id,
+                            'label': prop_label,
+                            'values': [claim.get('mainsnak', {}).get('datavalue', {}).get('value', {}) for claim in claims]
+                        }
+                        properties.append(property_info)
+                    except requests.RequestException:
+                        continue
 
             return Response(properties)
+        except requests.RequestException as e:
+            return Response({"error": f"Failed to connect to Wikidata API: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": f"Unexpected error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
