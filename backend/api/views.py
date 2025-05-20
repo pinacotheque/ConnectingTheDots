@@ -176,7 +176,7 @@ class SpaceViewSet(viewsets.ModelViewSet):
         entity_id = request.query_params.get('entity_id')
         if not entity_id:
             return Response({"error": "Entity ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         url = 'https://www.wikidata.org/w/api.php'
         params = {
             'action': 'wbgetclaims',
@@ -184,11 +184,11 @@ class SpaceViewSet(viewsets.ModelViewSet):
             'format': 'json',
             'limit': 50,
         }
-        
+
         try:
             response = requests.get(url, params=params)
             data = response.json()
-            
+
             properties = []
             for prop_id, claims in data.get('claims', {}).items():
                 if claims:
@@ -198,24 +198,23 @@ class SpaceViewSet(viewsets.ModelViewSet):
                         'ids': prop_id,
                         'languages': 'en',
                         'format': 'json',
-                        'limit': 50,
                     }
                     prop_response = requests.get(prop_url, params=prop_params)
                     prop_data = prop_response.json()
-                    
+
                     prop_label = prop_data.get('entities', {}).get(prop_id, {}).get('labels', {}).get('en', {}).get('value', prop_id)
-                    
+
                     property_info = {
                         'wikidata_id': prop_id,
                         'label': prop_label,
                         'values': [claim.get('mainsnak', {}).get('datavalue', {}).get('value', {}) for claim in claims]
                     }
                     properties.append(property_info)
-            
+
             return Response(properties)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def join(self, request, pk=None):
